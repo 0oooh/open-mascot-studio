@@ -1,12 +1,20 @@
 import {
+  buildScene,
   cloneDefinition,
   createDefinition,
+  getAnimationDuration,
   listBlobShapes,
+  sampleAnimation,
+  sampleExpression,
   validateDefinition,
 } from '/packages/open-mascot/src/index.js'
-import { createMascot } from '/packages/open-mascot/src/web.js'
+import { createMascot, renderSceneToSvgString } from '/packages/open-mascot/src/web.js'
+import { compileDraftTimeline } from '/examples/web/timeline.js'
+import { migrateStarterVocabulary } from '/examples/web/vocabulary.js'
 
-const STORAGE_KEY = 'open-mascot-studio-v2'
+const STORAGE_KEY = 'open-mascot-studio-v6'
+const PREVIOUS_STORAGE_KEY = 'open-mascot-studio-v5'
+const LEGACY_STORAGE_KEYS = ['open-mascot-studio-v4', 'open-mascot-studio-v3']
 const panel = document.querySelector('#panel')
 const stage = document.querySelector('#stage-canvas')
 const saveState = document.querySelector('#save-state')
@@ -15,6 +23,10 @@ const motionStatus = document.querySelector('#motion-status')
 const playIcon = document.querySelector('#play-icon')
 const toast = document.querySelector('#toast')
 const importFile = document.querySelector('#import-file')
+const draftTimeline = document.querySelector('#draft-timeline')
+
+const DRAFT_ANIMATION_KEY = '__draft-timeline'
+const DRAG_DATA_TYPE = 'application/x-open-mascot-item'
 
 const escapeHtml = value => String(value)
   .replaceAll('&', '&amp;')
@@ -28,23 +40,63 @@ const clone = value => JSON.parse(JSON.stringify(value))
 
 const createFreshDefinition = () => createDefinition({
   name: 'Mallow',
-  shape: 'circle',
-  color: '#b986cf',
-  eyeColor: '#2e1835',
-  stageColor: '#10151d',
+  shape: 'soft',
+  color: '#e98263',
+  eyeColor: '#3a1e17',
+  stageColor: '#111820',
 })
+
+const ensureExpressionMotions = target => {
+  for (const expression of Object.values(target?.expressions ?? {})) {
+    expression.motion = {
+      body: 'none',
+      eyes: 'none',
+      ...expression.motion,
+    }
+  }
+  return target
+}
+
+const migratePreviousDefinition = target => {
+  if (!target?.expressions) return target
+  const defaults = createFreshDefinition()
+  for (const key of ['angry', 'uneasy']) {
+    if (!target.expressions[key]) target.expressions[key] = clone(defaults.expressions[key])
+  }
+  if (target.blob?.color?.toLowerCase() === '#b986cf') target.blob.color = defaults.blob.color
+  if (target.face?.eyeColor?.toLowerCase() === '#2e1835') target.face.eyeColor = defaults.face.eyeColor
+  if (target.stage?.color?.toLowerCase() === '#10151d') target.stage.color = defaults.stage.color
+  return ensureExpressionMotions(migrateStarterVocabulary(target))
+}
 
 const loadDefinition = () => {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    const current = localStorage.getItem(STORAGE_KEY)
+    const previous = localStorage.getItem(PREVIOUS_STORAGE_KEY)
+      ?? LEGACY_STORAGE_KEYS.map(key => localStorage.getItem(key)).find(Boolean)
+    const saved = current
+      ? ensureExpressionMotions(JSON.parse(current))
+      : migratePreviousDefinition(JSON.parse(previous))
     if (saved?.face && saved.face.eyeShape == null) saved.face.eyeShape = 'capsule'
-    if (validateDefinition(saved).ok) return saved
+    if (validateDefinition(saved).ok) {
+      if (!current) localStorage.setItem(STORAGE_KEY, JSON.stringify(saved))
+      return saved
+    }
   } catch {}
   return createFreshDefinition()
 }
 
 const query = new URLSearchParams(location.search)
 let definition = loadDefinition()
+if (listBlobShapes().includes(query.get('shape'))) {
+  const requested = createDefinition({ shape: query.get('shape') })
+  definition.blob.shape = requested.blob.shape
+  definition.blob.width = requested.blob.width
+  definition.blob.height = requested.blob.height
+}
+if (['projected-3d', 'rigged-2d'].includes(query.get('render'))) {
+  definition.blob.renderMode = query.get('render')
+}
 let activeTab = ['design', 'expressions', 'motions', 'export', 'api'].includes(query.get('tab'))
   ? query.get('tab')
   : 'design'
@@ -58,6 +110,14 @@ let isPlaying = true
 let toastTimer = 0
 let saveTimer = 0
 let lastStatusUpdate = 0
+let followCursor = false
+let draftItems = []
+let draftLoop = true
+let draftPreview = null
+let draftPreviewActive = false
+let activeDraftItemId = null
+let draftId = 0
+let draggedDraftItemId = null
 
 const mascot = createMascot('#mascot-host', {
   definition,
@@ -107,7 +167,21 @@ const scheduleSave = () => {
   }, 220)
 }
 
+const clearDraftPreviewState = () => {
+  draftPreviewActive = false
+  draftPreview = null
+  activeDraftItemId = null
+  draftTimeline?.querySelectorAll('.draft-block.is-playing').forEach(item => item.classList.remove('is-playing'))
+}
+
 const updatePerformanceStatus = () => {
+  if (draftPreviewActive && draftPreview) {
+    previewTitle.textContent = draftPreview.animation.label
+    motionStatus.textContent = `${isPlaying ? 'Playing' : 'Paused'} · draft timeline`
+    playIcon.textContent = isPlaying ? 'Ⅱ' : '▶'
+    stage.style.setProperty('--stage', definition.stage.color)
+    return
+  }
   const animation = definition.animations[selectedAnimation]
   previewTitle.textContent = activeTab === 'expressions'
     ? definition.expressions[selectedExpression].label
@@ -118,6 +192,8 @@ const updatePerformanceStatus = () => {
 }
 
 const previewCurrentSelection = () => {
+  if (draftPreviewActive) mascot.setDefinition(definition)
+  clearDraftPreviewState()
   if (activeTab === 'expressions') {
     mascot.setExpression(selectedExpression)
     isPlaying = false
@@ -125,18 +201,29 @@ const previewCurrentSelection = () => {
     mascot.play(selectedAnimation)
     isPlaying = true
   }
+  renderDraftTimeline()
   updatePerformanceStatus()
 }
 
-const commitDefinition = () => {
+const commitDefinition = ({ preview = activeTab } = {}) => {
   const result = validateDefinition(definition)
   if (!result.ok) {
     saveState.innerHTML = '<i></i> Finish this field to save'
     return false
   }
   scheduleSave()
+  clearDraftPreviewState()
   mascot.setDefinition(definition)
-  previewCurrentSelection()
+  if (preview === 'expressions') {
+    mascot.setExpression(selectedExpression)
+    isPlaying = false
+  }
+  if (preview === 'motions') {
+    mascot.play(selectedAnimation)
+    isPlaying = true
+  }
+  renderDraftTimeline()
+  updatePerformanceStatus()
   return true
 }
 
@@ -167,17 +254,72 @@ const colorField = (label, path) => {
     </label>`
 }
 
+const thumbnailSvg = (type, key, label) => {
+  const pose = type === 'expression'
+    ? sampleExpression(definition, key, 0, { reducedMotion: true })
+    : sampleAnimation(
+        definition,
+        key,
+        Math.max(0, getAnimationDuration(definition.animations[key]) * 0.28),
+        { reducedMotion: true },
+      ).pose
+  return renderSceneToSvgString(buildScene(definition, pose), {
+    label: `${label} ${type} thumbnail`,
+  })
+}
+
+const renderLibraryCard = ({ type, key, item, selected }) => {
+  const selectAction = type === 'expression' ? 'select-expression' : 'select-animation'
+  const detail = type === 'expression'
+    ? 'Expression'
+    : `${item.steps.length} ${item.steps.length === 1 ? 'beat' : 'beats'}`
+  return `
+    <article class="library-card${selected ? ' selected' : ''}" draggable="true" data-library-type="${type}" data-library-key="${escapeHtml(key)}">
+      <button class="library-preview-button" type="button" data-action="${selectAction}" data-key="${escapeHtml(key)}" aria-pressed="${selected}">
+        <span class="library-thumbnail">${thumbnailSvg(type, key, item.label)}</span>
+        <span class="library-card-copy">
+          <strong>${escapeHtml(item.label)}</strong>
+          <small>${detail}</small>
+        </span>
+      </button>
+      <button class="library-add-button" type="button" data-action="add-to-draft" data-type="${type}" data-key="${escapeHtml(key)}" aria-label="Add ${escapeHtml(item.label)} to draft timeline">+</button>
+    </article>`
+}
+
+const renderLibrary = (type, collection, selectedKey) => `
+  <div class="library-grid" aria-label="${type === 'expression' ? 'Expression' : 'Motion'} library">
+    ${Object.entries(collection).map(([key, item]) => renderLibraryCard({
+      type,
+      key,
+      item,
+      selected: key === selectedKey,
+    })).join('')}
+  </div>`
+
 const renderDesign = () => {
   const shapes = listBlobShapes().map(shape => `
     <button type="button" data-action="select-shape" data-key="${shape}" aria-pressed="${shape === definition.blob.shape}">
       <strong>${titleCase(shape)}</strong>
-      <span>${shape === 'circle' ? 'Default primitive' : 'Same motion rig'}</span>
+      <span>${shape === 'soft' ? 'Default proportions' : shape === 'drop' ? 'Drop profile' : 'Same body rig'}</span>
     </button>`).join('')
 
   return `
     ${panelHeading('Shape the character', 'Tune one stable vector mascot. Every expression and animation inherits these choices.')}
     <section class="render-mode-block">
-      <div class="section-title"><h3>Blob primitive</h3><span>Six built-ins</span></div>
+      <div class="section-title"><h3>Renderer</h3><span>Compare live</span></div>
+      <div class="mode-switch" role="group" aria-label="Mascot renderer">
+        <button type="button" data-action="set-render-mode" data-mode="projected-3d" aria-pressed="${definition.blob.renderMode === 'projected-3d'}">
+          <strong>Projected 3D</strong>
+          <span>Full spatial turning</span>
+        </button>
+        <button type="button" data-action="set-render-mode" data-mode="rigged-2d" aria-pressed="${definition.blob.renderMode === 'rigged-2d'}">
+          <strong>Rigged 2D</strong>
+          <span>Lightweight for games</span>
+        </button>
+      </div>
+    </section>
+    <section class="render-mode-block">
+      <div class="section-title"><h3>Blob proportions</h3><span>Width + height presets</span></div>
       <div class="shape-grid" role="group" aria-label="Blob shape">${shapes}</div>
     </section>
     <section class="section-block">
@@ -202,17 +344,17 @@ const renderDesign = () => {
         <button class="choice-chip" type="button" data-action="select-eye-shape" data-key="oval" aria-pressed="${definition.face.eyeShape === 'oval'}">Oval</button>
       </div>
       <div class="control-grid">
-        ${rangeField({ label: 'Eye width', path: 'face.eyeWidth', value: definition.face.eyeWidth, min: 8, max: 38 })}
-        ${rangeField({ label: 'Eye height', path: 'face.eyeHeight', value: definition.face.eyeHeight, min: 10, max: 68 })}
-        ${rangeField({ label: 'Eye spacing', path: 'face.eyeGap', value: definition.face.eyeGap, min: 28, max: 100 })}
+        ${rangeField({ label: 'Eye width', path: 'face.eyeWidth', value: definition.face.eyeWidth, min: 10, max: 34 })}
+        ${rangeField({ label: 'Eye height', path: 'face.eyeHeight', value: definition.face.eyeHeight, min: 25, max: 72 })}
+        ${rangeField({ label: 'Eye spacing', path: 'face.eyeGap', value: definition.face.eyeGap, min: 30, max: 94 })}
         ${rangeField({ label: 'Vertical position', path: 'face.eyeY', value: definition.face.eyeY, min: -45, max: 35 })}
       </div>
     </section>
     <section class="section-block">
       <div class="section-title"><h3>Silhouette</h3><span>Motion-safe proportions</span></div>
       <div class="control-grid">
-        ${rangeField({ label: 'Blob width', path: 'blob.width', value: definition.blob.width, min: 130, max: 290 })}
-        ${rangeField({ label: 'Blob height', path: 'blob.height', value: definition.blob.height, min: 130, max: 290 })}
+        ${rangeField({ label: 'Blob width', path: 'blob.width', value: definition.blob.width, min: 160, max: 280 })}
+        ${rangeField({ label: 'Blob height', path: 'blob.height', value: definition.blob.height, min: 160, max: 330 })}
       </div>
     </section>`
 }
@@ -229,14 +371,10 @@ const poseRange = (label, path, min, max, step = 1) => rangeField({
 
 const renderExpressions = () => {
   const expression = definition.expressions[selectedExpression]
-  const chips = Object.entries(definition.expressions).map(([key, item]) => `
-    <button class="choice-chip" type="button" data-action="select-expression" data-key="${escapeHtml(key)}" aria-pressed="${key === selectedExpression}">
-      ${escapeHtml(item.label)}
-    </button>`).join('')
 
   return `
     ${panelHeading('Direct the expression', 'Pose each eye independently, then add restrained body language. Asymmetry keeps the face feeling alive.')}
-    <div class="chip-list">${chips}</div>
+    ${renderLibrary('expression', definition.expressions, selectedExpression)}
     <section class="section-block">
       <div class="section-title"><h3>Selected pose</h3><span>${escapeHtml(selectedExpression)}</span></div>
       <label class="field">
@@ -251,11 +389,11 @@ const renderExpressions = () => {
     <details class="subsection" open>
       <summary>Blob direction</summary>
       <div class="subsection-content control-grid">
-        ${poseRange('Horizontal', 'blob.x', -34, 34)}
-        ${poseRange('Lift', 'blob.y', -34, 34)}
-        ${poseRange('Head tilt', 'blob.rotation', -28, 28)}
-        ${poseRange('Width scale', 'blob.scaleX', .7, 1.3, .01)}
-        ${poseRange('Height scale', 'blob.scaleY', .7, 1.3, .01)}
+        ${poseRange('Look up / down', 'blob.pitch', -24, 24)}
+        ${poseRange('Turn left / right', 'blob.yaw', -28, 28)}
+        ${poseRange('Head tilt', 'blob.roll', -22, 22)}
+        ${poseRange('Squash / stretch', 'blob.squash', -.1, .13, .01)}
+        ${poseRange('Lift', 'blob.lift', -16, 18)}
       </div>
     </details>
     <details class="subsection" open>
@@ -263,6 +401,32 @@ const renderExpressions = () => {
       <div class="subsection-content control-grid">
         ${poseRange('Horizontal gaze', 'gaze.x', -18, 18)}
         ${poseRange('Vertical gaze', 'gaze.y', -18, 18)}
+      </div>
+    </details>
+    <details class="subsection" open>
+      <summary>Continuous expression motion</summary>
+      <div class="subsection-content control-grid">
+        <label class="field">
+          <span>Body motion</span>
+          <select class="select-input" data-scope="expression-meta" data-path="motion.body">
+            ${optionList([
+              { value: 'none', label: 'None' },
+              { value: 'slow-drift', label: 'Slow drift' },
+              { value: 'tremble', label: 'Tremble' },
+              { value: 'boing', label: 'Boing · squash + stretch' },
+            ], expression.motion?.body ?? 'none')}
+          </select>
+        </label>
+        <label class="field">
+          <span>Eye motion</span>
+          <select class="select-input" data-scope="expression-meta" data-path="motion.eyes">
+            ${optionList([
+              { value: 'none', label: 'None' },
+              { value: 'micro-saccades', label: 'Micro-saccades' },
+              { value: 'tremble', label: 'Tremble' },
+            ], expression.motion?.eyes ?? 'none')}
+          </select>
+        </label>
       </div>
     </details>
     ${renderEyeControls('left', 'Left eye')}
@@ -315,14 +479,10 @@ const renderStep = (step, index, stepCount) => `
 
 const renderMotions = () => {
   const animation = definition.animations[selectedAnimation]
-  const chips = Object.entries(definition.animations).map(([key, item]) => `
-    <button class="choice-chip" type="button" data-action="select-animation" data-key="${escapeHtml(key)}" aria-pressed="${key === selectedAnimation}">
-      ${escapeHtml(item.label)}
-    </button>`).join('')
 
   return `
     ${panelHeading('Compose the motion', 'Sequence expression beats, tune timing, and preview the same motion data used by both renderers.')}
-    <div class="chip-list">${chips}</div>
+    ${renderLibrary('motion', definition.animations, selectedAnimation)}
     <section class="section-block">
       <div class="section-title"><h3>Performance</h3><span>${animation.steps.length} beats</span></div>
       <div class="control-grid">
@@ -363,7 +523,7 @@ const renderMotions = () => {
         <button class="secondary-button" type="button" data-action="add-step">+ Add beat</button>
       </div>
     </section>
-    <p class="info-note purple">Naturalness comes from restraint: keep most holds between 1.5–5 seconds and transitions around 0.5–0.9 seconds.</p>`
+    <p class="info-note accent">Naturalness comes from restraint: keep most holds between 1.5–5 seconds and transitions around 0.5–0.9 seconds.</p>`
 }
 
 const browserInstall = 'npm install open-mascot'
@@ -373,17 +533,24 @@ import { createMascot } from 'open-mascot/web'
 const definition = createDefinition({
   shape: '${definition.blob.shape}',
   color: '${definition.blob.color}',
+  renderMode: '${definition.blob.renderMode}',
 })
 
 const mascot = createMascot('#mascot', {
   definition,
   animation: '${selectedAnimation}',
-})`
+})
+
+mascot.setLookTarget({ x: 0.7, y: -0.25 })
+mascot.clearLookTarget()`
 const nativeInstall = 'npm install open-mascot open-mascot-react-native react-native-svg'
 const nativeExample = `import { createDefinition } from 'open-mascot'
 import { OpenMascot } from 'open-mascot-react-native'
 
-const definition = createDefinition({ shape: '${definition.blob.shape}' })
+const definition = createDefinition({
+  shape: '${definition.blob.shape}',
+  renderMode: '${definition.blob.renderMode}',
+})
 
 export function Mascot() {
   return <OpenMascot
@@ -430,7 +597,7 @@ const renderExport = () => `
 
 const renderApi = () => `
   ${panelHeading('Ship the character', 'The studio edits the same portable JSON definition consumed by the browser and React Native packages.')}
-  <div class="info-note purple">Both renderers share blob geometry, expressions, animation timing, ambient motion, and the versioned definition schema.</div>
+  <div class="info-note accent">Both platforms share projected 3D, rigged 2D, expressions, blink timing, continuous expression motion, and the versioned definition schema. A saved draft becomes an ordinary animation in <code>definition.animations</code>. The browser controller also exposes setLookTarget() and clearLookTarget().</div>
   <section class="section-block">
     ${codeCard({
       title: 'Browser SVG runtime',
@@ -471,6 +638,7 @@ const renderPanel = () => {
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.setAttribute('aria-selected', String(button.dataset.tab === activeTab))
   })
+  renderDraftTimeline()
   updatePerformanceStatus()
 }
 
@@ -490,6 +658,131 @@ const createUniqueKey = (collection, label, fallback) => {
   let suffix = 2
   while (collection[key]) key = `${base}-${suffix++}`
   return key
+}
+
+const createDraftItem = (type, key) => ({
+  id: `draft-${Date.now()}-${++draftId}`,
+  type,
+  key,
+})
+
+const draftItemDefinition = item => item.type === 'expression'
+  ? definition.expressions[item.key]
+  : definition.animations[item.key]
+
+const draftItemDuration = item => item.type === 'expression'
+  ? (item.holdMs ?? 1800) + (item.transitionMs ?? 620)
+  : getAnimationDuration(definition.animations[item.key])
+
+const formatDuration = milliseconds => {
+  const seconds = milliseconds / 1000
+  return `${seconds >= 10 ? seconds.toFixed(0) : seconds.toFixed(1)}s`
+}
+
+const renderDraftTimeline = () => {
+  if (!draftTimeline) return
+  const blocks = draftItems.map(item => {
+    const source = draftItemDefinition(item)
+    if (!source) return ''
+    return `
+      <article class="draft-block ${item.type}${item.id === activeDraftItemId ? ' is-playing' : ''}" draggable="true" data-draft-id="${escapeHtml(item.id)}">
+        <span class="draft-block-kind">${item.type === 'expression' ? 'Expression' : 'Motion'}</span>
+        <strong>${escapeHtml(source.label)}</strong>
+        <small>${formatDuration(draftItemDuration(item))}${item.type === 'motion' ? ` · ${source.steps.length} beats` : ' · 1 beat'}</small>
+        <button class="draft-remove" type="button" data-action="remove-draft-item" data-id="${escapeHtml(item.id)}" aria-label="Remove ${escapeHtml(source.label)} from draft">×</button>
+      </article>`
+  }).join('')
+  const state = mascot?.getState?.()
+  const draftPlaying = draftPreviewActive && state?.animationKey === DRAFT_ANIMATION_KEY && state.playing
+
+  draftTimeline.innerHTML = `
+    <div class="draft-timeline-head">
+      <div>
+        <p class="eyebrow">Quick composer</p>
+        <h2>Draft timeline</h2>
+        <p>Drag a card here or use its + button. Motions stay grouped until you save.</p>
+      </div>
+      <div class="draft-actions">
+        <button class="timeline-button" type="button" data-action="toggle-draft-loop" aria-pressed="${draftLoop}">${draftLoop ? 'Loop' : 'Once'}</button>
+        <button class="timeline-button" type="button" data-action="clear-draft" ${draftItems.length ? '' : 'disabled'}>Clear</button>
+        <button class="timeline-button primary" type="button" data-action="play-draft" ${draftItems.length ? '' : 'disabled'}>${draftPlaying ? 'Pause' : 'Play'}</button>
+        <button class="timeline-button primary save" type="button" data-action="save-draft" ${draftItems.length ? '' : 'disabled'}>Save motion</button>
+      </div>
+    </div>
+    <div class="draft-track${draftItems.length ? '' : ' empty'}" data-draft-track role="list" aria-label="Draft sequence">
+      ${blocks || '<div class="draft-drop-hint"><strong>Build a performance</strong><span>Drop expressions and motions in this space</span></div>'}
+    </div>`
+}
+
+const compileCurrentDraft = (label = 'Draft motion') => compileDraftTimeline(definition, draftItems, {
+  label,
+  loop: draftLoop,
+})
+
+const setActiveDraftItem = id => {
+  if (activeDraftItemId === id) return
+  activeDraftItemId = id
+  draftTimeline?.querySelectorAll('[data-draft-id]').forEach(item => {
+    item.classList.toggle('is-playing', item.dataset.draftId === id)
+  })
+}
+
+const previewDraftTimeline = () => {
+  const compiled = compileCurrentDraft()
+  if (!compiled.animation.steps.length) {
+    showToast('Add an expression or motion first')
+    return
+  }
+  const previewDefinition = cloneDefinition(definition)
+  previewDefinition.animations[DRAFT_ANIMATION_KEY] = compiled.animation
+  draftPreview = compiled
+  draftPreviewActive = true
+  activeDraftItemId = compiled.stepOwners[0] ?? null
+  mascot.setDefinition(previewDefinition)
+  mascot.play(DRAFT_ANIMATION_KEY)
+  isPlaying = true
+  renderDraftTimeline()
+  updatePerformanceStatus()
+}
+
+const updateActiveDraft = callback => {
+  const wasPlaying = draftPreviewActive
+  callback()
+  if (wasPlaying && draftItems.length) previewDraftTimeline()
+  else {
+    if (wasPlaying) previewCurrentSelection()
+    renderDraftTimeline()
+  }
+}
+
+const addDraftItem = (type, key, index = draftItems.length) => {
+  const collection = type === 'expression' ? definition.expressions : definition.animations
+  if (!collection?.[key]) return
+  updateActiveDraft(() => draftItems.splice(index, 0, createDraftItem(type, key)))
+  showToast(`${collection[key].label} added to the draft`)
+}
+
+const saveDraftMotion = () => {
+  const baseLabel = 'Draft motion'
+  const key = createUniqueKey(definition.animations, baseLabel, 'draft-motion')
+  const suffix = key.match(/-(\d+)$/)?.[1]
+  const label = suffix ? `${baseLabel} ${suffix}` : baseLabel
+  const compiled = compileCurrentDraft(label)
+  if (!compiled.animation.steps.length) {
+    showToast('Add an expression or motion first')
+    return
+  }
+  definition.animations[key] = compiled.animation
+  selectedAnimation = key
+  commitDefinition({ preview: 'none' })
+  setActiveTab('motions')
+  showToast(`${label} saved to Motions`)
+}
+
+const getDraftInsertIndex = (track, clientX) => {
+  const blocks = [...track.querySelectorAll('[data-draft-id]')]
+  const targetIndex = blocks.findIndex(block => clientX < block.getBoundingClientRect().left + block.getBoundingClientRect().width / 2)
+  return targetIndex < 0 ? blocks.length : targetIndex
 }
 
 const download = (contents, filename, type) => {
@@ -541,6 +834,8 @@ document.addEventListener('click', event => {
     definition = createFreshDefinition()
     selectedExpression = Object.keys(definition.expressions)[0]
     selectedAnimation = Object.keys(definition.animations)[0]
+    draftItems = []
+    draftLoop = true
     commitDefinition()
     renderPanel()
     showToast('Studio reset')
@@ -549,6 +844,37 @@ document.addEventListener('click', event => {
   if (action === 'export-svg') exportSvg()
   if (action === 'import-json') importFile.click()
   if (action === 'copy-code') copyCode(trigger.dataset.target)
+  if (action === 'add-to-draft') addDraftItem(trigger.dataset.type, trigger.dataset.key)
+  if (action === 'remove-draft-item') {
+    updateActiveDraft(() => {
+      draftItems = draftItems.filter(item => item.id !== trigger.dataset.id)
+    })
+  }
+  if (action === 'clear-draft') {
+    updateActiveDraft(() => { draftItems = [] })
+    showToast('Draft cleared')
+  }
+  if (action === 'toggle-draft-loop') {
+    draftLoop = !draftLoop
+    if (draftPreviewActive) previewDraftTimeline()
+    else renderDraftTimeline()
+  }
+  if (action === 'play-draft') {
+    const state = mascot.getState()
+    if (!draftPreviewActive || state.animationKey !== DRAFT_ANIMATION_KEY || state.done) previewDraftTimeline()
+    else if (state.playing) {
+      mascot.pause()
+      isPlaying = false
+      renderDraftTimeline()
+      updatePerformanceStatus()
+    } else {
+      mascot.resume()
+      isPlaying = true
+      renderDraftTimeline()
+      updatePerformanceStatus()
+    }
+  }
+  if (action === 'save-draft') saveDraftMotion()
   if (action === 'select-shape') {
     const shapeDefinition = createDefinition({ shape: trigger.dataset.key })
     definition.blob.shape = trigger.dataset.key
@@ -556,6 +882,18 @@ document.addEventListener('click', event => {
     definition.blob.height = shapeDefinition.blob.height
     commitDefinition()
     renderPanel()
+  }
+  if (action === 'set-render-mode') {
+    definition.blob.renderMode = trigger.dataset.mode
+    commitDefinition()
+    renderPanel()
+    showToast(trigger.dataset.mode === 'rigged-2d' ? 'Rigged 2D renderer active' : 'Projected 3D renderer active')
+  }
+  if (action === 'toggle-follow') {
+    followCursor = !followCursor
+    trigger.setAttribute('aria-pressed', String(followCursor))
+    trigger.textContent = followCursor ? 'Following cursor' : 'Follow cursor'
+    if (!followCursor) mascot.clearLookTarget()
   }
   if (action === 'select-eye-shape') {
     definition.face.eyeShape = trigger.dataset.key
@@ -565,9 +903,7 @@ document.addEventListener('click', event => {
   if (action === 'select-expression') {
     selectedExpression = trigger.dataset.key
     renderPanel()
-    mascot.setExpression(selectedExpression)
-    isPlaying = false
-    updatePerformanceStatus()
+    previewCurrentSelection()
   }
   if (action === 'duplicate-expression') {
     const source = definition.expressions[selectedExpression]
@@ -586,8 +922,9 @@ document.addEventListener('click', event => {
     const usedByMotion = Object.values(definition.animations).some(animation =>
       animation.steps.some(step => step.expression === selectedExpression),
     )
-    if (usedByMotion) {
-      showToast('Remove this expression from motion beats first')
+    const usedByDraft = draftItems.some(item => item.type === 'expression' && item.key === selectedExpression)
+    if (usedByMotion || usedByDraft) {
+      showToast(`Remove this expression from ${usedByDraft ? 'the draft and ' : ''}motion beats first`)
       return
     }
     delete definition.expressions[selectedExpression]
@@ -599,13 +936,14 @@ document.addEventListener('click', event => {
   if (action === 'select-animation') {
     selectedAnimation = trigger.dataset.key
     renderPanel()
-    mascot.play(selectedAnimation)
-    isPlaying = true
-    updatePerformanceStatus()
+    previewCurrentSelection()
   }
   if (action === 'play-selected') {
+    if (draftPreviewActive) mascot.setDefinition(definition)
+    clearDraftPreviewState()
     mascot.play(selectedAnimation)
     isPlaying = true
+    renderDraftTimeline()
     updatePerformanceStatus()
   }
   if (action === 'duplicate-animation') {
@@ -619,7 +957,9 @@ document.addEventListener('click', event => {
   }
   if (action === 'delete-animation') {
     if (Object.keys(definition.animations).length === 1) return
+    const deletedKey = selectedAnimation
     delete definition.animations[selectedAnimation]
+    draftItems = draftItems.filter(item => !(item.type === 'motion' && item.key === deletedKey))
     selectedAnimation = Object.keys(definition.animations)[0]
     commitDefinition()
     renderPanel()
@@ -643,17 +983,83 @@ document.addEventListener('click', event => {
     const current = keys.indexOf(selectedAnimation)
     const delta = action === 'previous-motion' ? -1 : 1
     selectedAnimation = keys[(current + delta + keys.length) % keys.length]
+    if (draftPreviewActive) mascot.setDefinition(definition)
+    clearDraftPreviewState()
     mascot.play(selectedAnimation)
     isPlaying = true
     renderPanel()
   }
   if (action === 'toggle-play') {
     const state = mascot.getState()
-    if (state.staticExpression || state.done) mascot.play(selectedAnimation)
+    if (state.done && draftPreviewActive) previewDraftTimeline()
+    else if (state.staticExpression || state.done) mascot.play(selectedAnimation)
     else if (state.playing) mascot.pause()
     else mascot.resume()
     isPlaying = !state.playing || Boolean(state.staticExpression) || state.done
+    renderDraftTimeline()
     updatePerformanceStatus()
+  }
+})
+
+document.addEventListener('dragstart', event => {
+  const draftBlock = event.target.closest('[data-draft-id]')
+  const libraryCard = event.target.closest('[data-library-type][data-library-key]')
+  if (!draftBlock && !libraryCard) return
+
+  const payload = draftBlock
+    ? { source: 'timeline', id: draftBlock.dataset.draftId }
+    : { source: 'library', type: libraryCard.dataset.libraryType, key: libraryCard.dataset.libraryKey }
+  draggedDraftItemId = payload.id ?? null
+  event.dataTransfer.effectAllowed = draftBlock ? 'move' : 'copy'
+  event.dataTransfer.setData(DRAG_DATA_TYPE, JSON.stringify(payload))
+  event.dataTransfer.setData('text/plain', JSON.stringify(payload))
+  ;(draftBlock ?? libraryCard).classList.add('is-dragging')
+})
+
+document.addEventListener('dragend', event => {
+  event.target.closest('.is-dragging')?.classList.remove('is-dragging')
+  draftTimeline?.querySelector('[data-draft-track]')?.classList.remove('is-drag-over')
+  draggedDraftItemId = null
+})
+
+draftTimeline.addEventListener('dragover', event => {
+  const track = event.target.closest('[data-draft-track]')
+  if (!track) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = draggedDraftItemId ? 'move' : 'copy'
+  track.classList.add('is-drag-over')
+})
+
+draftTimeline.addEventListener('dragleave', event => {
+  const track = event.target.closest('[data-draft-track]')
+  if (track && !track.contains(event.relatedTarget)) track.classList.remove('is-drag-over')
+})
+
+draftTimeline.addEventListener('drop', event => {
+  const track = event.target.closest('[data-draft-track]')
+  if (!track) return
+  event.preventDefault()
+  track.classList.remove('is-drag-over')
+  let payload
+  try {
+    payload = JSON.parse(event.dataTransfer.getData(DRAG_DATA_TYPE) || event.dataTransfer.getData('text/plain'))
+  } catch {
+    return
+  }
+
+  let insertIndex = getDraftInsertIndex(track, event.clientX)
+  if (payload.source === 'library') {
+    addDraftItem(payload.type, payload.key, insertIndex)
+    return
+  }
+  if (payload.source === 'timeline') {
+    const fromIndex = draftItems.findIndex(item => item.id === payload.id)
+    if (fromIndex < 0) return
+    updateActiveDraft(() => {
+      const [item] = draftItems.splice(fromIndex, 1)
+      if (fromIndex < insertIndex) insertIndex -= 1
+      draftItems.splice(Math.max(0, insertIndex), 0, item)
+    })
   }
 })
 
@@ -690,9 +1096,11 @@ importFile.addEventListener('change', async () => {
     const next = JSON.parse(await file.text())
     const result = validateDefinition(next)
     if (!result.ok) throw new Error(result.errors.join(' '))
-    definition = cloneDefinition(next)
+    definition = ensureExpressionMotions(cloneDefinition(next))
     selectedExpression = Object.keys(definition.expressions)[0]
     selectedAnimation = Object.keys(definition.animations)[0]
+    draftItems = []
+    draftLoop = true
     commitDefinition()
     renderPanel()
     showToast('Definition imported')
@@ -707,6 +1115,17 @@ mascot.subscribe(state => {
   const currentTime = performance.now()
   if (currentTime - lastStatusUpdate < 120) return
   lastStatusUpdate = currentTime
+  if (state.animationKey === DRAFT_ANIMATION_KEY && draftPreview) {
+    draftPreviewActive = true
+    isPlaying = state.playing
+    previewTitle.textContent = draftPreview.animation.label
+    motionStatus.textContent = `${state.done ? 'Complete' : state.playing ? 'Playing' : 'Paused'} · draft beat ${state.stepIndex + 1}`
+    playIcon.textContent = state.playing ? 'Ⅱ' : '▶'
+    setActiveDraftItem(draftPreview.stepOwners[state.stepIndex] ?? null)
+    const draftPlayButton = draftTimeline?.querySelector('[data-action="play-draft"]')
+    if (draftPlayButton) draftPlayButton.textContent = state.playing ? 'Pause' : 'Play'
+    return
+  }
   const animation = definition.animations[state.animationKey]
   if (!animation) return
   isPlaying = state.playing
@@ -718,6 +1137,18 @@ mascot.subscribe(state => {
     motionStatus.textContent = `${state.done ? 'Complete' : state.playing ? 'Playing' : 'Paused'} · beat ${state.stepIndex + 1}`
   }
   playIcon.textContent = state.playing ? 'Ⅱ' : '▶'
+})
+
+stage.addEventListener('pointermove', event => {
+  if (!followCursor) return
+  const bounds = stage.getBoundingClientRect()
+  const x = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width) * 2 - 1))
+  const y = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height) * 2 - 1))
+  mascot.setLookTarget({ x, y })
+})
+
+stage.addEventListener('pointerleave', () => {
+  if (followCursor) mascot.clearLookTarget()
 })
 
 renderPanel()

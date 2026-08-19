@@ -29,6 +29,73 @@ const interpolateValue = (from, to, amount) => {
 export const interpolatePose = (from, to, amount, curve = 'gentle') =>
   interpolateValue(from, to, (easing[curve] ?? easing.gentle)(amount))
 
+const noExpressionMotion = { body: 'none', eyes: 'none' }
+const motionFor = expression => ({ ...noExpressionMotion, ...expression?.motion })
+
+export const hasExpressionMotion = expression => {
+  const motion = motionFor(expression)
+  return motion.body !== 'none' || motion.eyes !== 'none'
+}
+
+const saccadeTargets = [
+  [0, 0],
+  [0.72, -0.28],
+  [-0.34, 0.54],
+  [0.28, 0.18],
+  [-0.62, -0.12],
+  [0.12, -0.48],
+]
+
+const microSaccadeAt = elapsedMs => {
+  const intervalMs = 1240
+  const travelMs = 125
+  const step = Math.floor(Math.max(0, elapsedMs) / intervalMs)
+  const local = Math.max(0, elapsedMs) - step * intervalMs
+  const amount = easing.gentle(Math.min(1, local / travelMs))
+  const from = saccadeTargets[step % saccadeTargets.length]
+  const to = saccadeTargets[(step + 1) % saccadeTargets.length]
+  return {
+    x: from[0] + (to[0] - from[0]) * amount,
+    y: from[1] + (to[1] - from[1]) * amount,
+  }
+}
+
+export const applyExpressionMotion = (sourcePose, motion, elapsedMs, strength = 1) => {
+  const pose = JSON.parse(JSON.stringify(sourcePose))
+  const resolved = { ...noExpressionMotion, ...motion }
+  const seconds = Math.max(0, elapsedMs) / 1000
+  const amount = clamp(strength)
+
+  if (resolved.body === 'slow-drift') {
+    pose.blob.yaw += Math.sin(seconds * 0.73) * 1.4 * amount
+    pose.blob.pitch += Math.sin(seconds * 0.51) * 0.85 * amount
+    pose.blob.roll += Math.sin(seconds * 0.39) * 0.72 * amount
+    pose.blob.lift += Math.sin(seconds * 0.88) * 1.9 * amount
+  } else if (resolved.body === 'tremble') {
+    pose.blob.yaw += (Math.sin(seconds * 34) + Math.sin(seconds * 57) * 0.38) * 1.05 * amount
+    pose.blob.pitch += (Math.sin(seconds * 41) + Math.sin(seconds * 69) * 0.32) * 0.78 * amount
+    pose.blob.roll += Math.sin(seconds * 48) * 0.72 * amount
+    pose.blob.lift += (Math.sin(seconds * 37) + Math.sin(seconds * 63) * 0.3) * 1.25 * amount
+  } else if (resolved.body === 'boing') {
+    const phase = seconds * Math.PI * 2 * 1.25
+    const bounce = Math.sin(phase)
+    const rebound = Math.sin(phase * 2) * 0.18
+    pose.blob.squash += (bounce + rebound) * 0.075 * amount
+    pose.blob.lift += bounce * 5.4 * amount
+  }
+
+  if (resolved.eyes === 'micro-saccades') {
+    const target = microSaccadeAt(elapsedMs)
+    pose.gaze.x += target.x * 2.1 * amount
+    pose.gaze.y += target.y * 1.5 * amount
+  } else if (resolved.eyes === 'tremble') {
+    pose.gaze.x += (Math.sin(seconds * 52) + Math.sin(seconds * 77) * 0.36) * 1.35 * amount
+    pose.gaze.y += (Math.sin(seconds * 61) + Math.sin(seconds * 89) * 0.3) * 0.88 * amount
+  }
+
+  return pose
+}
+
 export const getAnimationDuration = animation =>
   animation.steps.reduce((total, step, index) => {
     const hasTransition = animation.playback === 'loop' || index < animation.steps.length - 1
@@ -101,17 +168,19 @@ const addAmbientMotion = (pose, elapsedMs, amount, blink) => {
   const next = JSON.parse(JSON.stringify(pose))
   const seconds = elapsedMs / 1000
   const strength = clamp(amount ?? 0)
-  const breathing = Math.sin(seconds * 1.18)
-  next.blob.y += Math.sin(seconds * 0.82 + 0.4) * 3.2 * strength
-  next.blob.rotation += Math.sin(seconds * 0.47 + 1.2) * 1.3 * strength
-  next.blob.scaleX *= 1 - breathing * 0.012 * strength
-  next.blob.scaleY *= 1 + breathing * 0.016 * strength
-  next.gaze.x += Math.sin(seconds * 0.31) * 0.45 * strength
-  next.gaze.y += Math.sin(seconds * 0.27 + 1.8) * 0.3 * strength
+  next.blob.lift += Math.sin(seconds * 0.79 + 0.4) * 2.1 * strength
+  next.blob.roll += Math.sin(seconds * 0.53 + 1.1) * 0.72 * strength
+  next.blob.pitch += Math.sin(seconds * 0.41 + 2.3) * 0.5 * strength
+  next.blob.squash += Math.sin(seconds * 1.06) * 0.006 * strength
+  next.gaze.x += Math.sin(seconds * 0.29 + 0.7) * 0.42 * strength
+  next.gaze.y += Math.sin(seconds * 0.23 + 2.7) * 0.3 * strength
 
   const blinkAmount = blinkAmountAt(elapsedMs, blink)
-  next.eyes.left.scaleY *= Math.max(0.06, 1 - blinkAmount * 0.95)
-  next.eyes.right.scaleY *= Math.max(0.06, 1 - blinkAmount * 0.95)
+  const leftDelay = blink === 'bright' ? 0.04 : 0
+  next.eyes.left.scaleY *= Math.max(0.055, 1 - blinkAmount * (0.95 - leftDelay))
+  next.eyes.right.scaleY *= Math.max(0.055, 1 - blinkAmount * 0.96)
+  next.eyes.left.y += blinkAmount * 1.25
+  next.eyes.right.y += blinkAmount * 1.05
   return { pose: next, blink: blinkAmount }
 }
 
@@ -120,23 +189,42 @@ export const sampleAnimation = (definition, animationKey, elapsedMs, options = {
   if (!animation) throw new Error(`Unknown animation: ${animationKey}`)
   const location = locateStep(animation, Math.max(0, elapsedMs))
   const currentStep = animation.steps[location.index]
-  const current = definition.expressions[currentStep.expression].pose
+  const currentExpression = definition.expressions[currentStep.expression]
+  const current = currentExpression.pose
   let pose = current
+  let expressionLayers = [{ expression: currentExpression, strength: 1 }]
 
   if (location.phase === 'transition') {
     const nextIndex = (location.index + 1) % animation.steps.length
     const nextStep = animation.steps[nextIndex]
-    pose = interpolatePose(current, definition.expressions[nextStep.expression].pose, location.progress, currentStep.easing)
+    const nextExpression = definition.expressions[nextStep.expression]
+    const transitionAmount = (easing[currentStep.easing] ?? easing.gentle)(location.progress)
+    pose = interpolatePose(current, nextExpression.pose, location.progress, currentStep.easing)
+    expressionLayers = [
+      { expression: currentExpression, strength: 1 - transitionAmount },
+      { expression: nextExpression, strength: transitionAmount },
+    ]
   }
 
   const layered = options.reducedMotion
     ? { pose: JSON.parse(JSON.stringify(pose)), blink: 0 }
     : addAmbientMotion(pose, elapsedMs, animation.ambient, animation.blink)
+  if (!options.reducedMotion) {
+    for (const layer of expressionLayers) {
+      layered.pose = applyExpressionMotion(
+        layered.pose,
+        motionFor(layer.expression),
+        elapsedMs,
+        layer.strength,
+      )
+    }
+  }
   return { ...location, ...layered, animationKey }
 }
 
-export const sampleExpression = (definition, expressionKey) => {
+export const sampleExpression = (definition, expressionKey, elapsedMs = 0, options = {}) => {
   const expression = definition.expressions[expressionKey]
   if (!expression) throw new Error(`Unknown expression: ${expressionKey}`)
-  return JSON.parse(JSON.stringify(expression.pose))
+  if (options.reducedMotion) return JSON.parse(JSON.stringify(expression.pose))
+  return applyExpressionMotion(expression.pose, motionFor(expression), elapsedMs)
 }

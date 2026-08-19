@@ -1,7 +1,7 @@
 {
   "name": "open-mascot",
   "version": "0.1.0",
-  "description": "A lightweight, platform-neutral 2D vector mascot engine with a browser SVG runtime.",
+  "description": "A lightweight vector mascot engine with projected-3D and rigged-2D SVG runtimes.",
   "author": "0oooh",
   "type": "module",
   "license": "MIT",

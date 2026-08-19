@@ -1,5 +1,6 @@
 .DS_Store
 coverage/
+dist/
 *.tgz
 node_modules/
 .npm-cache/

@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
     "test": "node --test",
     "check": "node --test && node scripts/check-project.mjs && npm run pack:check",
     "pack:check": "npm pack --dry-run --cache .npm-cache ./packages/open-mascot && npm pack --dry-run --cache .npm-cache ./packages/open-mascot-react-native"

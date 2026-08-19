@@ -27,8 +27,8 @@ export const renderNativeScene = (React, primitives, scene, props = {}) => {
     React.createElement(Rect, {
       x: 0,
       y: 0,
-      width: 400,
-      height: 400,
+      width: scene.width,
+      height: scene.height,
       fill: scene.background,
     }),
     React.createElement(Ellipse, scene.shadow),

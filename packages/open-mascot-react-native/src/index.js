@@ -23,28 +23,37 @@ export const OpenMascot = ({
   onComplete,
 }) => {
   const [elapsedMs, setElapsedMs] = React.useState(0)
+  const elapsedRef = React.useRef(0)
+  const completedRef = React.useRef(false)
 
   React.useEffect(() => {
+    elapsedRef.current = 0
+    completedRef.current = false
     setElapsedMs(0)
+  }, [animation, definition, reducedMotion])
+
+  React.useEffect(() => {
     if (!playing || reducedMotion) return undefined
     const animationDefinition = definition.animations[animation]
     if (!animationDefinition) return undefined
     const duration = getAnimationDuration(animationDefinition)
+    const elapsedAtStart = elapsedRef.current
     let startedAt = null
     let frameId = 0
-    let completed = false
 
     const tick = timestamp => {
       if (startedAt === null) startedAt = timestamp
-      const elapsed = timestamp - startedAt
+      const elapsed = elapsedAtStart + timestamp - startedAt
       if (animationDefinition.playback === 'once' && elapsed >= duration) {
+        elapsedRef.current = duration
         setElapsedMs(duration)
-        if (!completed) {
-          completed = true
+        if (!completedRef.current) {
+          completedRef.current = true
           onComplete?.(animation)
         }
         return
       }
+      elapsedRef.current = elapsed
       setElapsedMs(elapsed)
       frameId = requestAnimationFrame(tick)
     }

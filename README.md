@@ -1,12 +1,14 @@
 # Open Mascot
 
-Open Mascot is a dependency-free 2D vector mascot engine with matching browser and React Native renderers. A mascot is described once as JSON, then rendered and animated on either platform.
+Open Mascot is a dependency-free vector mascot engine with matching browser and React Native renderers. A mascot is described once as JSON, then rendered and animated on either platform.
 
-The default body primitive is called a **blob**. Built-in blob shapes are `circle`, `oval`, `capsule`, `bean`, `drop`, and `rounded-square`. Every shape uses the same pose space, so changing the silhouette does not require rewriting expressions or animations.
+The default body primitive is called a **blob**. The `soft` preset keeps the original rounded-body proportions; `round`, `tall`, `wide`, `compact`, and `large` vary its width and height. `drop` adds a teardrop profile. Every preset uses the same pose space, so changing the silhouette does not require rewriting expressions or animations.
+
+Choose `projected-3d` for spatial pitch/yaw/roll and perspective-projected eyes, or `rigged-2d` for the lighter flat rig. Both produce ordinary SVG paths. The browser controller can also follow a normalized pointer target with `setLookTarget({ x, y })`; eyes lead and the body follows with a softer delay.
 
 Eyes can use either the original soft `capsule` style or an `oval` style. The choice is stored in the same portable definition and rendered consistently on both platforms.
 
-The default definition includes 13 editable expressions and 11 composed motions. Motion steps retain their expression, easing curve, hold time, transition time, ambient amount, and blink profile.
+The default definition includes 15 editable expressions and 11 composed motions. Expressions can independently add body drift, body tremble, a squash-and-stretch boing, eye micro-saccades, or eye tremble without changing their saved pose. Motion steps retain their expression, easing curve, hold time, transition time, ambient amount, and blink profile.
 
 ## Packages
 
@@ -23,8 +25,9 @@ import { createMascot } from 'open-mascot/web'
 
 const character = createDefinition({
   name: 'Mallow',
-  shape: 'bean',
-  color: '#8b7cf6',
+  shape: 'drop',
+  color: '#e98263',
+  renderMode: 'projected-3d',
 })
 
 const mascot = createMascot('#mascot', {
@@ -32,8 +35,18 @@ const mascot = createMascot('#mascot', {
   animation: 'idle',
 })
 
-mascot.play('hello')
+mascot.play('happy')
 mascot.setExpression('curious')
+mascot.setLookTarget({ x: 0.8, y: -0.3 })
+mascot.clearLookTarget()
+```
+
+Continuous behavior belongs to the expression, so it works in a static preview and inside any motion sequence:
+
+```js
+character.expressions.angry.motion = { body: 'tremble', eyes: 'none' }
+character.expressions.uneasy.motion = { body: 'slow-drift', eyes: 'tremble' }
+character.expressions.beaming.motion = { body: 'boing', eyes: 'none' }
 ```
 
 ## React Native
@@ -42,7 +55,7 @@ mascot.setExpression('curious')
 import { createDefinition } from 'open-mascot'
 import { OpenMascot } from 'open-mascot-react-native'
 
-const character = createDefinition({ shape: 'drop' })
+const character = createDefinition({ shape: 'soft' })
 
 export function Character() {
   return <OpenMascot definition={character} animation="idle" width={240} height={240} />

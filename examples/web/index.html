@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f5f0e8" />
+    <meta name="theme-color" content="#fbf7f1" />
     <meta
       name="description"
-      content="Design, animate, export, and integrate lightweight 2D vector mascots."
+      content="Design, animate, export, and integrate lightweight vector mascots."
     />
     <title>Open Mascot Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -43,12 +43,13 @@
             <p class="eyebrow">Live performance</p>
             <h1 id="preview-title">Idle</h1>
           </div>
-          <span class="motion-status" id="motion-status">Playing · circle blob</span>
+          <span class="motion-status" id="motion-status">Playing · soft blob</span>
         </div>
 
         <div class="stage-shell">
           <div class="stage-canvas" id="stage-canvas">
             <div class="stage-glow" aria-hidden="true"></div>
+            <button class="follow-cursor-button" type="button" data-action="toggle-follow" aria-pressed="false">Follow cursor</button>
             <div id="mascot-host" class="mascot-host"></div>
           </div>
           <div class="transport" aria-label="Animation controls">
@@ -71,6 +72,8 @@
             <p>One JSON definition drives the same lightweight SVG motion on the web and React Native.</p>
           </div>
         </div>
+
+        <section class="draft-timeline" id="draft-timeline" aria-label="Draft motion timeline"></section>
       </section>
 
       <aside class="inspector" aria-label="Mascot editor">

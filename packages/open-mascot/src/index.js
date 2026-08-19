@@ -7,13 +7,14 @@ export {
   validateDefinition,
 } from './definition.js'
 export {
-  createBlobPath,
+  getBlobPreset,
   hasBlobShape,
   listBlobShapes,
-  registerBlobShape,
 } from './shapes.js'
 export {
+  applyExpressionMotion,
   getAnimationDuration,
+  hasExpressionMotion,
   interpolatePose,
   sampleAnimation,
   sampleExpression,

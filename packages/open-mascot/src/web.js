@@ -1,8 +1,9 @@
 import { createDefinition, validateDefinition } from './definition.js'
-import { interpolatePose, sampleAnimation, sampleExpression } from './motion.js'
+import { hasExpressionMotion, interpolatePose, sampleAnimation, sampleExpression } from './motion.js'
 import { buildScene, VIEWBOX } from './scene.js'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+let rendererCount = 0
 const escapeXml = value => String(value)
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -15,10 +16,12 @@ const eyeMarkup = eye =>
 
 export const renderSceneToSvgString = (scene, options = {}) => {
   const label = escapeXml(options.label ?? 'Animated mascot')
+  const shadowId = 'open-mascot-shadow-blur'
   return [
     `<svg xmlns="${SVG_NS}" viewBox="${scene.viewBox}" role="img" aria-label="${label}">`,
+    `<defs><filter id="${shadowId}" x="-30%" y="-180%" width="160%" height="460%"><feGaussianBlur stdDeviation="13"/></filter></defs>`,
     `<rect width="${VIEWBOX.width}" height="${VIEWBOX.height}" fill="${escapeXml(scene.background)}"/>`,
-    `<ellipse cx="${scene.shadow.cx}" cy="${scene.shadow.cy}" rx="${scene.shadow.rx}" ry="${scene.shadow.ry}" fill="${scene.shadow.fill}" opacity="${scene.shadow.opacity}"/>`,
+    `<ellipse cx="${scene.shadow.cx}" cy="${scene.shadow.cy}" rx="${scene.shadow.rx}" ry="${scene.shadow.ry}" fill="${scene.shadow.fill}" opacity="${scene.shadow.opacity}" filter="url(#${shadowId})"/>`,
     `<g transform="${scene.transform}">`,
     `<path d="${escapeXml(scene.blob.path)}" fill="${escapeXml(scene.blob.fill)}"/>`,
     ...scene.eyes.map(eyeMarkup),
@@ -32,7 +35,12 @@ const setAttributes = (element, attributes) => {
 }
 
 const createSvgRenderer = (document, definition, pose) => {
+  rendererCount += 1
+  const shadowId = `open-mascot-shadow-blur-${rendererCount}`
   const svg = document.createElementNS(SVG_NS, 'svg')
+  const defs = document.createElementNS(SVG_NS, 'defs')
+  const shadowFilter = document.createElementNS(SVG_NS, 'filter')
+  const shadowBlur = document.createElementNS(SVG_NS, 'feGaussianBlur')
   const background = document.createElementNS(SVG_NS, 'rect')
   const shadow = document.createElementNS(SVG_NS, 'ellipse')
   const group = document.createElementNS(SVG_NS, 'g')
@@ -51,9 +59,20 @@ const createSvgRenderer = (document, definition, pose) => {
     'aria-label': definition.name,
     preserveAspectRatio: 'xMidYMid meet',
   })
+  setAttributes(shadowFilter, {
+    id: shadowId,
+    x: '-30%',
+    y: '-180%',
+    width: '160%',
+    height: '460%',
+  })
+  shadowBlur.setAttribute('stdDeviation', '13')
+  shadowFilter.append(shadowBlur)
+  defs.append(shadowFilter)
+  shadow.setAttribute('filter', `url(#${shadowId})`)
   setAttributes(background, { x: 0, y: 0, width: VIEWBOX.width, height: VIEWBOX.height })
   group.prepend(blob)
-  svg.append(background, shadow, group)
+  svg.append(defs, background, shadow, group)
 
   const update = (nextDefinition, nextPose) => {
     const scene = buildScene(nextDefinition, nextPose)
@@ -99,6 +118,12 @@ export const createMascot = (target, options = {}) => {
   let destroyed = false
   let latestScene
   let latestSample
+  let lookTarget = { x: 0, y: 0 }
+  let lookEyes = { x: 0, y: 0 }
+  let lookBody = { x: 0, y: 0 }
+  let lookFollowing = false
+  let lookActive = false
+  let lastLookFrame = startedAt
   const listeners = new Set()
   const reducedMotion = options.reducedMotion ?? globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   const requestFrame = globalThis.requestAnimationFrame?.bind(globalThis)
@@ -109,10 +134,39 @@ export const createMascot = (target, options = {}) => {
   host.replaceChildren(renderer.svg)
   latestScene = renderer.update(definition, initialPose)
 
+  const applyLookTarget = (sourcePose, timestamp) => {
+    const delta = Math.max(0, Math.min(64, timestamp - lastLookFrame))
+    lastLookFrame = timestamp
+    const eyeAmount = 1 - Math.exp(-delta / 72)
+    const bodyAmount = 1 - Math.exp(-delta / 190)
+    lookEyes.x += (lookTarget.x - lookEyes.x) * eyeAmount
+    lookEyes.y += (lookTarget.y - lookEyes.y) * eyeAmount
+    lookBody.x += (lookTarget.x - lookBody.x) * bodyAmount
+    lookBody.y += (lookTarget.y - lookBody.y) * bodyAmount
+    const remaining = Math.max(
+      Math.abs(lookEyes.x - lookTarget.x),
+      Math.abs(lookEyes.y - lookTarget.y),
+      Math.abs(lookBody.x - lookTarget.x),
+      Math.abs(lookBody.y - lookTarget.y),
+    )
+    lookActive = lookFollowing || remaining > 0.002
+    const pose = JSON.parse(JSON.stringify(sourcePose))
+    pose.gaze.x += lookEyes.x * 12
+    pose.gaze.y += lookEyes.y * 9
+    pose.blob.yaw += lookBody.x * 15
+    pose.blob.pitch -= lookBody.y * 10
+    pose.blob.roll += lookBody.x * lookBody.y * 2.2
+    return pose
+  }
+
   const render = timestamp => {
     const elapsedMs = playing ? elapsedBeforeStart + timestamp - startedAt : elapsedBeforeStart
+    const expressionElapsedMs = staticExpression ? Math.max(0, timestamp - startedAt) : elapsedMs
     const sampled = staticExpression
-      ? { pose: sampleExpression(definition, staticExpression), done: true }
+      ? {
+          pose: sampleExpression(definition, staticExpression, expressionElapsedMs, { reducedMotion }),
+          done: true,
+        }
       : sampleAnimation(definition, animationKey, elapsedMs, { reducedMotion })
     let pose = sampled.pose
     if (bridge) {
@@ -120,6 +174,7 @@ export const createMascot = (target, options = {}) => {
       if (progress < 1) pose = interpolatePose(bridge.from, pose, progress, 'gentle')
       else bridge = null
     }
+    pose = applyLookTarget(pose, timestamp)
     latestScene = renderer.update(definition, pose)
     if (!staticExpression && sampled.done && definition.animations[animationKey].playback === 'once') {
       playing = false
@@ -149,13 +204,19 @@ export const createMascot = (target, options = {}) => {
   const tick = timestamp => {
     if (destroyed) return
     render(timestamp)
-    if ((playing || bridge) && requestFrame) frameId = requestFrame(tick)
+    const expressionMoving = !reducedMotion
+      && staticExpression
+      && hasExpressionMotion(definition.expressions[staticExpression])
+    if ((playing || bridge || lookActive || expressionMoving) && requestFrame) frameId = requestFrame(tick)
   }
 
   const restartFrames = timestamp => {
     if (frameId && cancelFrame) cancelFrame(frameId)
     frameId = 0
-    if ((playing || bridge) && requestFrame) frameId = requestFrame(tick)
+    const expressionMoving = !reducedMotion
+      && staticExpression
+      && hasExpressionMotion(definition.expressions[staticExpression])
+    if ((playing || bridge || lookActive || expressionMoving) && requestFrame) frameId = requestFrame(tick)
     else render(timestamp)
   }
 
@@ -191,9 +252,7 @@ export const createMascot = (target, options = {}) => {
       if (!playing) return this
       elapsedBeforeStart += timestamp - startedAt
       playing = false
-      if (frameId && cancelFrame) cancelFrame(frameId)
-      frameId = 0
-      render(timestamp)
+      restartFrames(timestamp)
       return this
     },
     resume(timestamp = globalThis.performance?.now?.() ?? Date.now()) {
@@ -213,6 +272,22 @@ export const createMascot = (target, options = {}) => {
       elapsedBeforeStart = 0
       startedAt = timestamp
       bridge = reducedMotion ? null : { from, startedAt: timestamp, durationMs: 420 }
+      restartFrames(timestamp)
+      return this
+    },
+    setLookTarget(target, timestamp = globalThis.performance?.now?.() ?? Date.now()) {
+      const x = Number.isFinite(target?.x) ? Math.max(-1, Math.min(1, target.x)) : 0
+      const y = Number.isFinite(target?.y) ? Math.max(-1, Math.min(1, target.y)) : 0
+      lookTarget = { x, y }
+      lookFollowing = true
+      lookActive = true
+      restartFrames(timestamp)
+      return this
+    },
+    clearLookTarget(timestamp = globalThis.performance?.now?.() ?? Date.now()) {
+      lookTarget = { x: 0, y: 0 }
+      lookFollowing = false
+      lookActive = true
       restartFrames(timestamp)
       return this
     },
