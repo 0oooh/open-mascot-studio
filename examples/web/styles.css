@@ -281,7 +281,7 @@ h1, h2, h3, p { margin-top: 0; }
 }
 .tab-list {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   height: 64px;
   padding: 10px 14px 0;
   border-bottom: 1px solid var(--line);

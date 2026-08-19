@@ -1,5 +1,5 @@
 import { createDefinition, validateDefinition } from './definition.js'
-import { sampleAnimation, sampleExpression } from './motion.js'
+import { interpolatePose, sampleAnimation, sampleExpression } from './motion.js'
 import { buildScene, VIEWBOX } from './scene.js'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -94,9 +94,12 @@ export const createMascot = (target, options = {}) => {
   let playing = options.autoplay !== false
   let elapsedBeforeStart = 0
   let startedAt = globalThis.performance?.now?.() ?? Date.now()
+  let bridge = null
   let frameId = 0
   let destroyed = false
   let latestScene
+  let latestSample
+  const listeners = new Set()
   const reducedMotion = options.reducedMotion ?? globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   const requestFrame = globalThis.requestAnimationFrame?.bind(globalThis)
   const cancelFrame = globalThis.cancelAnimationFrame?.bind(globalThis)
@@ -111,19 +114,49 @@ export const createMascot = (target, options = {}) => {
     const sampled = staticExpression
       ? { pose: sampleExpression(definition, staticExpression), done: true }
       : sampleAnimation(definition, animationKey, elapsedMs, { reducedMotion })
-    latestScene = renderer.update(definition, sampled.pose)
-    if (sampled.done && definition.animations[animationKey].playback === 'once') {
+    let pose = sampled.pose
+    if (bridge) {
+      const progress = bridge.durationMs ? (timestamp - bridge.startedAt) / bridge.durationMs : 1
+      if (progress < 1) pose = interpolatePose(bridge.from, pose, progress, 'gentle')
+      else bridge = null
+    }
+    latestScene = renderer.update(definition, pose)
+    if (!staticExpression && sampled.done && definition.animations[animationKey].playback === 'once') {
       playing = false
       elapsedBeforeStart = sampled.duration
       options.onComplete?.(animationKey)
     }
-    return sampled
+    latestSample = {
+      ...sampled,
+      pose,
+      animationKey,
+      elapsedMs,
+      playing,
+      staticExpression,
+    }
+    listeners.forEach(listener => listener({
+      animationKey,
+      playing,
+      elapsedMs,
+      stepIndex: sampled.index ?? 0,
+      phase: sampled.phase ?? 'hold',
+      done: Boolean(sampled.done),
+      staticExpression,
+    }))
+    return latestSample
   }
 
   const tick = timestamp => {
     if (destroyed) return
     render(timestamp)
-    if (playing && requestFrame) frameId = requestFrame(tick)
+    if ((playing || bridge) && requestFrame) frameId = requestFrame(tick)
+  }
+
+  const restartFrames = timestamp => {
+    if (frameId && cancelFrame) cancelFrame(frameId)
+    frameId = 0
+    if ((playing || bridge) && requestFrame) frameId = requestFrame(tick)
+    else render(timestamp)
   }
 
   if (playing && requestFrame) frameId = requestFrame(tick)
@@ -133,23 +166,25 @@ export const createMascot = (target, options = {}) => {
     element: renderer.svg,
     play(nextAnimation, timestamp = globalThis.performance?.now?.() ?? Date.now()) {
       if (!definition.animations[nextAnimation]) throw new Error(`Unknown animation: ${nextAnimation}`)
-      if (frameId && cancelFrame) cancelFrame(frameId)
+      const from = render(timestamp).pose
       animationKey = nextAnimation
       staticExpression = null
       elapsedBeforeStart = 0
       startedAt = timestamp
       playing = true
-      if (requestFrame) frameId = requestFrame(tick)
-      else render(timestamp)
+      bridge = reducedMotion ? null : { from, startedAt: timestamp, durationMs: 540 }
+      restartFrames(timestamp)
       return this
     },
     setExpression(expressionKey, timestamp = globalThis.performance?.now?.() ?? Date.now()) {
       if (!definition.expressions[expressionKey]) throw new Error(`Unknown expression: ${expressionKey}`)
-      if (frameId && cancelFrame) cancelFrame(frameId)
+      const from = render(timestamp).pose
       staticExpression = expressionKey
       playing = false
       elapsedBeforeStart = 0
-      render(timestamp)
+      startedAt = timestamp
+      bridge = reducedMotion ? null : { from, startedAt: timestamp, durationMs: 460 }
+      restartFrames(timestamp)
       return this
     },
     pause(timestamp = globalThis.performance?.now?.() ?? Date.now()) {
@@ -157,6 +192,7 @@ export const createMascot = (target, options = {}) => {
       elapsedBeforeStart += timestamp - startedAt
       playing = false
       if (frameId && cancelFrame) cancelFrame(frameId)
+      frameId = 0
       render(timestamp)
       return this
     },
@@ -164,23 +200,39 @@ export const createMascot = (target, options = {}) => {
       if (playing || staticExpression) return this
       startedAt = timestamp
       playing = true
-      if (requestFrame) frameId = requestFrame(tick)
-      else render(timestamp)
+      restartFrames(timestamp)
       return this
     },
     setDefinition(nextDefinition, timestamp = globalThis.performance?.now?.() ?? Date.now()) {
       const result = validateDefinition(nextDefinition)
       if (!result.ok) throw new Error(result.errors.join('\n'))
+      const from = render(timestamp).pose
       definition = nextDefinition
       if (!definition.animations[animationKey]) animationKey = Object.keys(definition.animations)[0]
       staticExpression = null
       elapsedBeforeStart = 0
       startedAt = timestamp
-      render(timestamp)
+      bridge = reducedMotion ? null : { from, startedAt: timestamp, durationMs: 420 }
+      restartFrames(timestamp)
       return this
     },
     getScene() {
       return latestScene
+    },
+    getState() {
+      return {
+        animationKey,
+        playing,
+        elapsedMs: latestSample?.elapsedMs ?? 0,
+        stepIndex: latestSample?.index ?? 0,
+        phase: latestSample?.phase ?? 'hold',
+        done: Boolean(latestSample?.done),
+        staticExpression,
+      }
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
     },
     exportSvg() {
       return renderSceneToSvgString(latestScene, { label: definition.name })
@@ -188,6 +240,7 @@ export const createMascot = (target, options = {}) => {
     destroy() {
       destroyed = true
       if (frameId && cancelFrame) cancelFrame(frameId)
+      listeners.clear()
       renderer.svg.remove()
     },
   }

@@ -24,6 +24,7 @@ const escapeHtml = value => String(value)
   .replaceAll("'", '&#039;')
 
 const titleCase = value => value.charAt(0).toUpperCase() + value.slice(1).replaceAll('-', ' ')
+const clone = value => JSON.parse(JSON.stringify(value))
 
 const createFreshDefinition = () => createDefinition({
   name: 'Mallow',
@@ -44,7 +45,7 @@ const loadDefinition = () => {
 
 const query = new URLSearchParams(location.search)
 let definition = loadDefinition()
-let activeTab = ['design', 'expressions', 'motions', 'api'].includes(query.get('tab'))
+let activeTab = ['design', 'expressions', 'motions', 'export', 'api'].includes(query.get('tab'))
   ? query.get('tab')
   : 'design'
 let selectedExpression = definition.expressions[query.get('expression')]
@@ -56,6 +57,7 @@ let selectedAnimation = definition.animations[query.get('motion')]
 let isPlaying = true
 let toastTimer = 0
 let saveTimer = 0
+let lastStatusUpdate = 0
 
 const mascot = createMascot('#mascot-host', {
   definition,
@@ -241,6 +243,10 @@ const renderExpressions = () => {
         <span>Expression name</span>
         <input class="text-input" value="${escapeHtml(expression.label)}" data-scope="expression-meta" data-path="label" />
       </label>
+      <div class="action-row">
+        <button class="secondary-button" type="button" data-action="duplicate-expression">Duplicate pose</button>
+        <button class="danger-button" type="button" data-action="delete-expression" ${selectedExpression === 'neutral' ? 'disabled' : ''}>Delete</button>
+      </div>
     </section>
     <details class="subsection" open>
       <summary>Blob direction</summary>
@@ -275,9 +281,12 @@ const renderEyeControls = (side, label) => `
     </div>
   </details>`
 
-const renderStep = (step, index) => `
+const renderStep = (step, index, stepCount) => `
   <div class="step-card">
-    <div class="step-heading"><strong>Beat ${index + 1}</strong><span>${escapeHtml(step.expression)}</span></div>
+    <div class="step-heading">
+      <strong>Beat ${index + 1}</strong>
+      <button class="icon-button" type="button" data-action="delete-step" data-index="${index}" aria-label="Delete beat ${index + 1}" ${stepCount === 1 ? 'disabled' : ''}>×</button>
+    </div>
     <div class="control-grid">
       <label class="field">
         <span>Expression</span>
@@ -342,13 +351,19 @@ const renderMotions = () => {
         ${rangeField({ label: 'Ambient motion', path: 'ambient', value: animation.ambient, min: 0, max: 1, step: .01, scope: 'animation' })}
       </div>
       <div class="action-row">
-        <button class="primary-button" type="button" data-action="play-selected">Play selected motion</button>
+        <button class="primary-button" type="button" data-action="play-selected">Play motion</button>
+        <button class="secondary-button" type="button" data-action="duplicate-animation">Duplicate</button>
+        <button class="danger-button" type="button" data-action="delete-animation" ${Object.keys(definition.animations).length === 1 ? 'disabled' : ''}>Delete</button>
       </div>
     </section>
     <section class="section-block">
-      <div class="section-title"><h3>Timeline</h3><span>Expression → hold → transition</span></div>
-      ${animation.steps.map(renderStep).join('')}
-    </section>`
+      <div class="section-title"><h3>Timeline beats</h3><span>Hold first, then move</span></div>
+      ${animation.steps.map((step, index) => renderStep(step, index, animation.steps.length)).join('')}
+      <div class="action-row">
+        <button class="secondary-button" type="button" data-action="add-step">+ Add beat</button>
+      </div>
+    </section>
+    <p class="info-note purple">Naturalness comes from restraint: keep most holds between 1.5–5 seconds and transitions around 0.5–0.9 seconds.</p>`
 }
 
 const browserInstall = 'npm install open-mascot'
@@ -390,6 +405,29 @@ const codeCard = ({ title, badge, description, install, example, id }) => `
     <button class="secondary-button" type="button" data-action="copy-code" data-target="${id}-example">Copy example</button>
   </article>`
 
+const renderExport = () => `
+  ${panelHeading('Take the mascot anywhere', 'Keep the editable source, export the exact SVG pose on stage, or bring a definition back for further editing.')}
+  <div class="export-card">
+    <h3>Editable mascot file</h3>
+    <p>Includes the blob design, eye style, all expressions, and every motion sequence.</p>
+    <button class="primary-button" type="button" data-action="export-json">Download .mascot.json</button>
+  </div>
+  <div class="export-card">
+    <h3>SVG snapshot</h3>
+    <p>Exports the exact pose visible on stage as a compact, scalable vector.</p>
+    <button class="secondary-button" type="button" data-action="export-svg">Download SVG</button>
+  </div>
+  <div class="export-card">
+    <h3>Continue editing</h3>
+    <p>Import a definition from this studio. Invalid or incompatible files are rejected safely.</p>
+    <button class="secondary-button" type="button" data-action="import-json">Import mascot file</button>
+  </div>
+  <div class="export-card">
+    <h3>Developer integration</h3>
+    <p>Use the same definition through the browser or React Native package.</p>
+    <button class="secondary-button" type="button" data-action="open-api">Open API Docs</button>
+  </div>`
+
 const renderApi = () => `
   ${panelHeading('Ship the character', 'The studio edits the same portable JSON definition consumed by the browser and React Native packages.')}
   <div class="info-note purple">Both renderers share blob geometry, expressions, animation timing, ambient motion, and the versioned definition schema.</div>
@@ -422,7 +460,13 @@ const renderApi = () => `
   </section>`
 
 const renderPanel = () => {
-  const renders = { design: renderDesign, expressions: renderExpressions, motions: renderMotions, api: renderApi }
+  const renders = {
+    design: renderDesign,
+    expressions: renderExpressions,
+    motions: renderMotions,
+    export: renderExport,
+    api: renderApi,
+  }
   panel.innerHTML = renders[activeTab]()
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.setAttribute('aria-selected', String(button.dataset.tab === activeTab))
@@ -440,15 +484,33 @@ const setActiveTab = tab => {
   previewCurrentSelection()
 }
 
-const exportDefinition = () => {
-  const blob = new Blob([`${JSON.stringify(definition, null, 2)}\n`], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
+const createUniqueKey = (collection, label, fallback) => {
+  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || fallback
+  let key = base
+  let suffix = 2
+  while (collection[key]) key = `${base}-${suffix++}`
+  return key
+}
+
+const download = (contents, filename, type) => {
+  const url = URL.createObjectURL(new Blob([contents], { type }))
   const link = document.createElement('a')
   link.href = url
-  link.download = `${definition.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'mascot'}.mascot.json`
+  link.download = filename
   link.click()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+const exportDefinition = () => {
+  const name = definition.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'mascot'
+  download(`${JSON.stringify(definition, null, 2)}\n`, `${name}.mascot.json`, 'application/json')
   showToast('Definition exported')
+}
+
+const exportSvg = () => {
+  const name = definition.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'mascot'
+  download(mascot.exportSvg(), `${name}-pose.svg`, 'image/svg+xml')
+  showToast('SVG pose exported')
 }
 
 const copyCode = async target => {
@@ -475,6 +537,7 @@ document.addEventListener('click', event => {
 
   if (action === 'open-api') setActiveTab('api')
   if (action === 'reset') {
+    if (!confirm('Reset the mascot, expressions, and motions to the defaults?')) return
     definition = createFreshDefinition()
     selectedExpression = Object.keys(definition.expressions)[0]
     selectedAnimation = Object.keys(definition.animations)[0]
@@ -483,6 +546,7 @@ document.addEventListener('click', event => {
     showToast('Studio reset')
   }
   if (action === 'export-json') exportDefinition()
+  if (action === 'export-svg') exportSvg()
   if (action === 'import-json') importFile.click()
   if (action === 'copy-code') copyCode(trigger.dataset.target)
   if (action === 'select-shape') {
@@ -505,6 +569,33 @@ document.addEventListener('click', event => {
     isPlaying = false
     updatePerformanceStatus()
   }
+  if (action === 'duplicate-expression') {
+    const source = definition.expressions[selectedExpression]
+    const key = createUniqueKey(definition.expressions, `${source.label} copy`, 'expression')
+    definition.expressions[key] = clone({ ...source, label: `${source.label} copy` })
+    selectedExpression = key
+    commitDefinition()
+    renderPanel()
+    showToast('Expression duplicated')
+  }
+  if (action === 'delete-expression') {
+    if (selectedExpression === 'neutral') {
+      showToast('Neutral is the required base pose')
+      return
+    }
+    const usedByMotion = Object.values(definition.animations).some(animation =>
+      animation.steps.some(step => step.expression === selectedExpression),
+    )
+    if (usedByMotion) {
+      showToast('Remove this expression from motion beats first')
+      return
+    }
+    delete definition.expressions[selectedExpression]
+    selectedExpression = 'neutral'
+    commitDefinition()
+    renderPanel()
+    showToast('Expression deleted')
+  }
   if (action === 'select-animation') {
     selectedAnimation = trigger.dataset.key
     renderPanel()
@@ -517,6 +608,36 @@ document.addEventListener('click', event => {
     isPlaying = true
     updatePerformanceStatus()
   }
+  if (action === 'duplicate-animation') {
+    const source = definition.animations[selectedAnimation]
+    const key = createUniqueKey(definition.animations, `${source.label} copy`, 'motion')
+    definition.animations[key] = clone({ ...source, label: `${source.label} copy` })
+    selectedAnimation = key
+    commitDefinition()
+    renderPanel()
+    showToast('Motion duplicated')
+  }
+  if (action === 'delete-animation') {
+    if (Object.keys(definition.animations).length === 1) return
+    delete definition.animations[selectedAnimation]
+    selectedAnimation = Object.keys(definition.animations)[0]
+    commitDefinition()
+    renderPanel()
+    showToast('Motion deleted')
+  }
+  if (action === 'add-step') {
+    const steps = definition.animations[selectedAnimation].steps
+    const previous = steps.at(-1)
+    steps.push({ expression: previous.expression, holdMs: 1800, transitionMs: 620, easing: 'gentle' })
+    commitDefinition()
+    renderPanel()
+  }
+  if (action === 'delete-step') {
+    const steps = definition.animations[selectedAnimation].steps
+    if (steps.length > 1) steps.splice(Number(trigger.dataset.index), 1)
+    commitDefinition()
+    renderPanel()
+  }
   if (action === 'previous-motion' || action === 'next-motion') {
     const keys = Object.keys(definition.animations)
     const current = keys.indexOf(selectedAnimation)
@@ -527,9 +648,11 @@ document.addEventListener('click', event => {
     renderPanel()
   }
   if (action === 'toggle-play') {
-    if (isPlaying) mascot.pause()
+    const state = mascot.getState()
+    if (state.staticExpression || state.done) mascot.play(selectedAnimation)
+    else if (state.playing) mascot.pause()
     else mascot.resume()
-    isPlaying = !isPlaying
+    isPlaying = !state.playing || Boolean(state.staticExpression) || state.done
     updatePerformanceStatus()
   }
 })
@@ -578,6 +701,23 @@ importFile.addEventListener('change', async () => {
   } finally {
     importFile.value = ''
   }
+})
+
+mascot.subscribe(state => {
+  const currentTime = performance.now()
+  if (currentTime - lastStatusUpdate < 120) return
+  lastStatusUpdate = currentTime
+  const animation = definition.animations[state.animationKey]
+  if (!animation) return
+  isPlaying = state.playing
+  if (state.staticExpression) {
+    previewTitle.textContent = definition.expressions[state.staticExpression]?.label ?? 'Expression'
+    motionStatus.textContent = `Expression preview · ${titleCase(definition.blob.shape)} blob`
+  } else {
+    previewTitle.textContent = animation.label
+    motionStatus.textContent = `${state.done ? 'Complete' : state.playing ? 'Playing' : 'Paused'} · beat ${state.stepIndex + 1}`
+  }
+  playIcon.textContent = state.playing ? 'Ⅱ' : '▶'
 })
 
 renderPanel()

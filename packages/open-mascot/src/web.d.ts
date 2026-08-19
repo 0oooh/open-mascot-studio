@@ -8,8 +8,20 @@ export interface MascotController {
   resume(): this
   setDefinition(definition: MascotDefinition): this
   getScene(): MascotScene
+  getState(): MascotControllerState
+  subscribe(listener: (state: MascotControllerState) => void): () => void
   exportSvg(): string
   destroy(): void
+}
+
+export interface MascotControllerState {
+  animationKey: string
+  playing: boolean
+  elapsedMs: number
+  stepIndex: number
+  phase: string
+  done: boolean
+  staticExpression: string | null
 }
 
 export function renderSceneToSvgString(scene: MascotScene, options?: { label?: string }): string

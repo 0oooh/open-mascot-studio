@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildScene, createDefinition, sampleAnimation } from '../packages/open-mascot/src/index.js'
-import { renderSceneToSvgString } from '../packages/open-mascot/src/web.js'
+import { createMascot, renderSceneToSvgString } from '../packages/open-mascot/src/web.js'
 import { renderNativeScene } from '../packages/open-mascot-react-native/src/native-elements.js'
 
 const sceneFor = shape => {
@@ -45,4 +45,58 @@ test('the React Native adapter renders the same scene through injected primitive
   assert.equal(tree.children[2].type, 'G')
   assert.equal(tree.children[2].children[0].type, 'Path')
   assert.equal(tree.children[2].children[0].props.d, scene.blob.path)
+})
+
+test('the browser controller bridges smoothly when selecting an expression', () => {
+  const callbacks = new Map()
+  let nextFrame = 0
+  const previousRequest = globalThis.requestAnimationFrame
+  const previousCancel = globalThis.cancelAnimationFrame
+  globalThis.requestAnimationFrame = callback => {
+    const id = ++nextFrame
+    callbacks.set(id, callback)
+    return id
+  }
+  globalThis.cancelAnimationFrame = id => callbacks.delete(id)
+
+  class SvgNode {
+    constructor() {
+      this.attributes = {}
+      this.children = []
+    }
+    setAttribute(name, value) { this.attributes[name] = String(value) }
+    append(...children) { this.children.push(...children) }
+    prepend(...children) { this.children.unshift(...children) }
+    remove() {}
+  }
+
+  const document = { createElementNS: () => new SvgNode() }
+  const host = {
+    ownerDocument: document,
+    replaceChildren(...children) { this.children = children },
+  }
+  const runFrame = timestamp => {
+    const pending = [...callbacks.values()]
+    callbacks.clear()
+    pending.forEach(callback => callback(timestamp))
+  }
+
+  try {
+    const definition = createDefinition()
+    const mascot = createMascot(host, { definition, animation: 'idle' })
+    runFrame(0)
+    const before = mascot.getScene().eyes[0].path
+    mascot.setExpression('skeptical', 0)
+    runFrame(230)
+    const during = mascot.getScene().eyes[0].path
+    runFrame(461)
+    const after = mascot.getScene().eyes[0].path
+    assert.notEqual(during, before)
+    assert.notEqual(during, after)
+    assert.equal(mascot.getState().staticExpression, 'skeptical')
+    mascot.destroy()
+  } finally {
+    globalThis.requestAnimationFrame = previousRequest
+    globalThis.cancelAnimationFrame = previousCancel
+  }
 })
