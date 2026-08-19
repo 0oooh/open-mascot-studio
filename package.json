@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "author": "0oooh",
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "packages/*"
