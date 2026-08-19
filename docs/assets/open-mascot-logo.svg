@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="220" viewBox="0 0 900 220" role="img" aria-labelledby="title description">
+  <title id="title">Open Mascot Studio</title>
+  <desc id="description">A warm orange blob mascot beside the Open Mascot Studio wordmark.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffaf4"/>
+      <stop offset="1" stop-color="#f7eee4"/>
+    </linearGradient>
+    <linearGradient id="mascot" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2a184"/>
+      <stop offset="1" stop-color="#d85c3d"/>
+    </linearGradient>
+    <filter id="shadow" x="-40%" y="-40%" width="180%" height="200%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#6f2c1d" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+  <rect x="2" y="2" width="896" height="216" rx="42" fill="url(#paper)" stroke="#eadbcf" stroke-width="4"/>
+  <g transform="translate(42 31)" filter="url(#shadow)">
+    <rect width="158" height="158" rx="48" fill="url(#mascot)"/>
+    <rect x="59" y="48" width="11" height="32" rx="6" fill="#3a1e17"/>
+    <rect x="88" y="48" width="11" height="32" rx="6" fill="#3a1e17"/>
+    <ellipse cx="34" cy="151" rx="45" ry="30" transform="rotate(17 34 151)" fill="#c94f34" fill-opacity="0.72"/>
+    <ellipse cx="124" cy="151" rx="45" ry="30" transform="rotate(-17 124 151)" fill="#c94f34" fill-opacity="0.72"/>
+  </g>
+  <text x="242" y="104" fill="#2c221d" font-family="Alice, Georgia, serif" font-size="66" letter-spacing="-1">Open Mascot</text>
+  <text x="246" y="148" fill="#8b695b" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="5">STUDIO · MIT</text>
+  <circle cx="754" cy="146" r="6" fill="#e98263"/>
+  <circle cx="777" cy="146" r="9" fill="#c94f34"/>
+  <circle cx="806" cy="146" r="13" fill="#3a1e17"/>
+</svg>
