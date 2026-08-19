@@ -60,6 +60,35 @@ const microSaccadeAt = elapsedMs => {
   }
 }
 
+const sampleLoop = (frames, position) => {
+  const wrapped = ((position % frames.length) + frames.length) % frames.length
+  const currentIndex = Math.floor(wrapped)
+  const nextIndex = (currentIndex + 1) % frames.length
+  const amount = easing.gentle(wrapped - currentIndex)
+  return Object.fromEntries(
+    Object.keys(frames[currentIndex]).map(key => [
+      key,
+      frames[currentIndex][key] + (frames[nextIndex][key] - frames[currentIndex][key]) * amount,
+    ]),
+  )
+}
+
+const bodyTrembleFrames = [
+  { yaw: -0.82, pitch: 0.38, roll: -0.28, lift: 0.62 },
+  { yaw: 0.54, pitch: -0.66, roll: 0.43, lift: -0.44 },
+  { yaw: 1.08, pitch: 0.2, roll: -0.24, lift: 0.86 },
+  { yaw: -0.46, pitch: 0.72, roll: 0.34, lift: -0.58 },
+  { yaw: 0.16, pitch: -0.31, roll: -0.49, lift: 0.22 },
+]
+
+const eyeTrembleFrames = [
+  { x: -1.12, y: 0.44 },
+  { x: 0.67, y: -0.74 },
+  { x: 1.28, y: 0.2 },
+  { x: -0.48, y: 0.8 },
+  { x: 0.2, y: -0.36 },
+]
+
 export const applyExpressionMotion = (sourcePose, motion, elapsedMs, strength = 1) => {
   const pose = JSON.parse(JSON.stringify(sourcePose))
   const resolved = { ...noExpressionMotion, ...motion }
@@ -72,10 +101,11 @@ export const applyExpressionMotion = (sourcePose, motion, elapsedMs, strength = 
     pose.blob.roll += Math.sin(seconds * 0.39) * 0.72 * amount
     pose.blob.lift += Math.sin(seconds * 0.88) * 1.9 * amount
   } else if (resolved.body === 'tremble') {
-    pose.blob.yaw += (Math.sin(seconds * 34) + Math.sin(seconds * 57) * 0.38) * 1.05 * amount
-    pose.blob.pitch += (Math.sin(seconds * 41) + Math.sin(seconds * 69) * 0.32) * 0.78 * amount
-    pose.blob.roll += Math.sin(seconds * 48) * 0.72 * amount
-    pose.blob.lift += (Math.sin(seconds * 37) + Math.sin(seconds * 63) * 0.3) * 1.25 * amount
+    const frame = sampleLoop(bodyTrembleFrames, seconds * 8.4)
+    pose.blob.yaw += frame.yaw * amount
+    pose.blob.pitch += frame.pitch * amount
+    pose.blob.roll += frame.roll * amount
+    pose.blob.lift += frame.lift * amount
   } else if (resolved.body === 'boing') {
     const phase = seconds * Math.PI * 2 * 1.25
     const bounce = Math.sin(phase)
@@ -89,8 +119,9 @@ export const applyExpressionMotion = (sourcePose, motion, elapsedMs, strength = 
     pose.gaze.x += target.x * 2.1 * amount
     pose.gaze.y += target.y * 1.5 * amount
   } else if (resolved.eyes === 'tremble') {
-    pose.gaze.x += (Math.sin(seconds * 52) + Math.sin(seconds * 77) * 0.36) * 1.35 * amount
-    pose.gaze.y += (Math.sin(seconds * 61) + Math.sin(seconds * 89) * 0.3) * 0.88 * amount
+    const frame = sampleLoop(eyeTrembleFrames, seconds * 10.6)
+    pose.gaze.x += frame.x * amount
+    pose.gaze.y += frame.y * amount
   }
 
   return pose

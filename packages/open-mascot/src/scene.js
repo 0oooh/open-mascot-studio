@@ -5,7 +5,7 @@ const CAMERA_DISTANCE = 650
 const BODY_CENTER_Y = 280
 
 const fixed = value => Number((Number.isFinite(value) ? value : 0).toFixed(3))
-const radians = degrees => (degrees * Math.PI) / 180
+const degreesToRadians = degrees => (Math.PI * degrees) / 180
 
 const normalizedPose = pose => ({
   pitch: pose.pitch ?? 0,
@@ -17,9 +17,9 @@ const normalizedPose = pose => ({
 
 const rotatePoint = ([x, y, z], rawPose) => {
   const pose = normalizedPose(rawPose)
-  const pitch = radians(pose.pitch)
-  const yaw = radians(pose.yaw)
-  const roll = radians(pose.roll)
+  const pitch = degreesToRadians(pose.pitch)
+  const yaw = degreesToRadians(pose.yaw)
+  const roll = degreesToRadians(pose.roll)
   const pitched = [
     x,
     y * Math.cos(pitch) - z * Math.sin(pitch),
@@ -113,7 +113,7 @@ const projectedEye = (definition, pose, side) => {
   const centerY = face.eyeY + pose.gaze.y + eye.y
   const width = Math.max(2, face.eyeWidth * eye.scaleX)
   const height = Math.max(2, face.eyeHeight * eye.scaleY)
-  const angle = radians(eye.rotation)
+  const angle = degreesToRadians(eye.rotation)
   const bodyDepth = Math.min(blob.width, blob.height) * (150 / 220)
   const points = eyeOutline(face.eyeShape ?? 'capsule', width, height).map(([x, y]) => {
     const rotatedX = x * Math.cos(angle) - y * Math.sin(angle)
@@ -150,8 +150,9 @@ const projectedBodyPath = (blob, rawPose) => {
   const qyy = columns.reduce((sum, column) => sum + column[1] ** 2, 0)
   const axis = bodyAxis(blob, pose).map(value => value * squash)
 
-  const points = Array.from({ length: 96 }, (_, index) => {
-    const angle = (index / 96) * Math.PI * 2
+  const perimeterSamples = 92
+  const points = Array.from({ length: perimeterSamples }, (_, index) => {
+    const angle = (index * Math.PI * 2) / perimeterSamples
     const direction = [Math.cos(angle), Math.sin(angle)]
     const qDirection = [
       qxx * direction[0] + qxy * direction[1],
@@ -175,7 +176,7 @@ const riggedPoint = ([x, y], blob, rawPose) => {
   const verticalProgress = y / Math.max(1, blob.height / 2)
   const bentX = x * yawScale + pose.yaw * verticalProgress * 0.18
   const bentY = y * (1 - pose.squash) * pitchScale
-  const roll = radians(pose.roll)
+  const roll = degreesToRadians(pose.roll)
   return {
     x: VIEWBOX.width / 2
       + (bentX * Math.cos(roll) - bentY * Math.sin(roll)) * CHARACTER_SCALE
@@ -190,13 +191,14 @@ const capsuleOutline = (width, height) => {
   const vertical = height >= width
   const radius = Math.min(width, height) / 2
   const straightHalf = Math.max(0, (Math.max(width, height) - Math.min(width, height)) / 2)
-  return Array.from({ length: 96 }, (_, index) => {
-    const angle = (index / 96) * Math.PI * 2
-    const cosine = Math.cos(angle)
-    const sine = Math.sin(angle)
+  const outlineSamples = 88
+  return Array.from({ length: outlineSamples }, (_, sampleIndex) => {
+    const phase = (sampleIndex * Math.PI * 2) / outlineSamples
+    const unitX = Math.cos(phase)
+    const unitY = Math.sin(phase)
     return vertical
-      ? [radius * cosine, radius * sine + (Math.abs(sine) < 1e-8 ? 0 : Math.sign(sine)) * straightHalf]
-      : [radius * cosine + (Math.abs(cosine) < 1e-8 ? 0 : Math.sign(cosine)) * straightHalf, radius * sine]
+      ? [radius * unitX, radius * unitY + (Math.abs(unitY) < 1e-8 ? 0 : Math.sign(unitY)) * straightHalf]
+      : [radius * unitX + (Math.abs(unitX) < 1e-8 ? 0 : Math.sign(unitX)) * straightHalf, radius * unitY]
   })
 }
 
@@ -251,7 +253,7 @@ const riggedEye = (definition, pose, side) => {
     direction * face.eyeGap / 2 + pose.gaze.x + eye.x,
     face.eyeY + pose.gaze.y + eye.y,
   ]
-  const angle = radians(eye.rotation)
+  const angle = degreesToRadians(eye.rotation)
   const projection = CAMERA_DISTANCE / (CAMERA_DISTANCE - (Math.min(blob.width, blob.height) * (150 / 220)) / 2)
   const points = eyeOutline(
     face.eyeShape ?? 'capsule',

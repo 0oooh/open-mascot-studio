@@ -44,10 +44,10 @@ const baseDefinition = {
   face: {
     eyeShape: 'capsule',
     eyeColor: '#18332a',
-    eyeWidth: 20,
-    eyeHeight: 50,
-    eyeGap: 35,
-    eyeY: -7,
+    eyeWidth: 23,
+    eyeHeight: 56,
+    eyeGap: 42,
+    eyeY: -10,
   },
   stage: {
     color: '#f3efe7',

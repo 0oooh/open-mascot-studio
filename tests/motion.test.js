@@ -21,7 +21,7 @@ test('looping motion samples continuously for every blob shape', () => {
   }
 })
 
-test('the original spatial motion deforms every proportion preset', () => {
+test('the spatial motion deforms every proportion preset', () => {
   for (const shape of listBlobShapes()) {
     const definition = createDefinition({ shape })
     const first = buildScene(definition, sampleAnimation(definition, 'idle', 0).pose)

@@ -37,6 +37,8 @@ const escapeHtml = value => String(value)
 
 const titleCase = value => value.charAt(0).toUpperCase() + value.slice(1).replaceAll('-', ' ')
 const clone = value => JSON.parse(JSON.stringify(value))
+const identifierFrom = value =>
+  (value.normalize('NFKD').match(/[a-z0-9]+/gi) ?? []).join('-').toLowerCase()
 
 const createFreshDefinition = () => createDefinition({
   name: 'Mallow',
@@ -653,7 +655,7 @@ const setActiveTab = tab => {
 }
 
 const createUniqueKey = (collection, label, fallback) => {
-  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || fallback
+  const base = identifierFrom(label) || fallback
   let key = base
   let suffix = 2
   while (collection[key]) key = `${base}-${suffix++}`
@@ -795,13 +797,13 @@ const download = (contents, filename, type) => {
 }
 
 const exportDefinition = () => {
-  const name = definition.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'mascot'
+  const name = identifierFrom(definition.name) || 'mascot'
   download(`${JSON.stringify(definition, null, 2)}\n`, `${name}.mascot.json`, 'application/json')
   showToast('Definition exported')
 }
 
 const exportSvg = () => {
-  const name = definition.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'mascot'
+  const name = identifierFrom(definition.name) || 'mascot'
   download(mascot.exportSvg(), `${name}-pose.svg`, 'image/svg+xml')
   showToast('SVG pose exported')
 }

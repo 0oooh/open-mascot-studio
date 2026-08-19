@@ -7,7 +7,7 @@ import {
   validateDefinition,
 } from '../packages/open-mascot/src/index.js'
 
-test('the default mascot keeps the original projected body proportions', () => {
+test('the default mascot keeps the base projected body proportions', () => {
   const definition = createDefinition()
   assert.equal(definition.schemaVersion, 2)
   assert.equal(definition.blob.shape, 'soft')

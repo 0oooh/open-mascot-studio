@@ -2,11 +2,11 @@
 
 Open Mascot is a dependency-free vector mascot engine with matching browser and React Native renderers. A mascot is described once as JSON, then rendered and animated on either platform.
 
-The default body primitive is called a **blob**. The `soft` preset keeps the original rounded-body proportions; `round`, `tall`, `wide`, `compact`, and `large` vary its width and height. `drop` adds a teardrop profile. Every preset uses the same pose space, so changing the silhouette does not require rewriting expressions or animations.
+The default body primitive is called a **blob**. The `soft` preset keeps the base rounded-body proportions; `round`, `tall`, `wide`, `compact`, and `large` vary its width and height. `drop` adds a teardrop profile. Every preset uses the same pose space, so changing the silhouette does not require rewriting expressions or animations.
 
 Choose `projected-3d` for spatial pitch/yaw/roll and perspective-projected eyes, or `rigged-2d` for the lighter flat rig. Both produce ordinary SVG paths. The browser controller can also follow a normalized pointer target with `setLookTarget({ x, y })`; eyes lead and the body follows with a softer delay.
 
-Eyes can use either the original soft `capsule` style or an `oval` style. The choice is stored in the same portable definition and rendered consistently on both platforms.
+Eyes can use either the default soft `capsule` style or an `oval` style. The choice is stored in the same portable definition and rendered consistently on both platforms.
 
 The default definition includes 15 editable expressions and 11 composed motions. Expressions can independently add body drift, body tremble, a squash-and-stretch boing, eye micro-saccades, or eye tremble without changing their saved pose. Motion steps retain their expression, easing curve, hold time, transition time, ambient amount, and blink profile.
 
@@ -73,7 +73,7 @@ npm run check
 
 ## Project boundary
 
-This personal MIT project contains only generic primitives, original example definitions, and its own implementation. It ships no company-specific characters, assets, palettes, links, or product copy.
+This personal MIT project contains only generic primitives, project-specific example definitions, and its own implementation. It ships no company-specific characters, assets, palettes, links, or product copy.
 
 ## License
 
