@@ -3,6 +3,7 @@ import path from 'node:path'
 
 const root = process.cwd()
 const outputDirectory = path.join(root, 'dist', 'server')
+const staticDirectory = path.join(root, 'dist', 'static')
 const files = [
   ['/', 'examples/web/index.html', 'text/html; charset=utf-8'],
   ['/index.html', 'examples/web/index.html', 'text/html; charset=utf-8'],
@@ -56,4 +57,11 @@ export default {
 await rm(path.join(root, 'dist'), { recursive: true, force: true })
 await mkdir(outputDirectory, { recursive: true })
 await writeFile(path.join(outputDirectory, 'index.js'), worker)
+
+for (const [url, source] of files) {
+  if (url === '/') continue
+  const destination = path.join(staticDirectory, url.slice(1))
+  await mkdir(path.dirname(destination), { recursive: true })
+  await writeFile(destination, await readFile(path.join(root, source)))
+}
 console.log(`Built Open Mascot Studio (${files.length} routes).`)
