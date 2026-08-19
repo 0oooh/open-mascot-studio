@@ -7,11 +7,8 @@ export const renderNativeScene = (React, primitives, scene, props = {}) => {
         key: `eye-${index}`,
         transform: `rotate(${eye.rotation} ${eye.cx} ${eye.cy})`,
       },
-      React.createElement(Ellipse, {
-        cx: eye.cx,
-        cy: eye.cy,
-        rx: eye.rx,
-        ry: eye.ry,
+      React.createElement(Path, {
+        d: eye.path,
         fill: eye.fill,
       }),
     ),

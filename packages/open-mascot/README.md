@@ -16,4 +16,6 @@ const mascot = createMascot('#mascot', { definition, animation: 'idle' })
 
 Built-in shapes: `circle`, `oval`, `capsule`, `bean`, `drop`, and `rounded-square`.
 
+Built-in eye styles: `capsule` and `oval`.
+
 Licensed under MIT.

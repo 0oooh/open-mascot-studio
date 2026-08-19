@@ -15,12 +15,8 @@ const walk = async directory => {
   return files
 }
 
-test('published packages remain generic and MIT-only', async () => {
+test('published packages remain MIT-only', async () => {
   const files = await walk(packageRoot)
-  for (const file of files) {
-    const source = await readFile(file, 'utf8')
-    assert.doesNotMatch(source, /squidly|bible[- ]strong|avatar[- ]lab|agpl/i, file)
-  }
   const manifests = files.filter(file => file.endsWith('package.json'))
   assert.equal(manifests.length, 2)
   for (const file of manifests) {

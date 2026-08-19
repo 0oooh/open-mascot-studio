@@ -3,59 +3,89 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Open Mascot browser and React Native 2D blob demo." />
-    <title>Open Mascot</title>
+    <meta name="theme-color" content="#f5f0e8" />
+    <meta
+      name="description"
+      content="Design, animate, export, and integrate lightweight 2D vector mascots."
+    />
+    <title>Open Mascot Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Alice&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/examples/web/styles.css" />
   </head>
   <body>
-    <header>
-      <a href="/" class="brand" aria-label="Open Mascot home">
-        <span class="brand-dot" aria-hidden="true"><i></i><i></i></span>
-        <span><strong>Open Mascot</strong><small>MIT · 2D vector runtime</small></span>
+    <header class="app-header">
+      <a class="brand" href="/" aria-label="Open Mascot Studio home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span>
+          <strong>Open Mascot</strong>
+          <small>Studio · MIT</small>
+        </span>
       </a>
-      <code>npm install open-mascot</code>
+      <div class="header-actions">
+        <span class="save-state" id="save-state"><i></i> Saved locally</span>
+        <button class="quiet-button" type="button" data-action="open-api">API docs</button>
+        <button class="quiet-button" type="button" data-action="reset">Reset</button>
+        <button class="primary-button compact" type="button" data-action="export-json">
+          Export definition
+        </button>
+      </div>
     </header>
 
-    <main>
-      <section class="intro">
-        <p class="eyebrow">One definition, two platforms</p>
-        <h1>Shape a blob.<br />Keep the motion.</h1>
-        <p class="lede">Every silhouette below shares the same expression and animation data across browser SVG and React Native.</p>
-
-        <div class="control-group">
-          <span>Blob shape</span>
-          <div class="shape-list" id="shape-list"></div>
+    <main class="workspace">
+      <section class="preview" aria-label="Mascot preview">
+        <div class="preview-heading">
+          <div>
+            <p class="eyebrow">Live performance</p>
+            <h1 id="preview-title">Idle</h1>
+          </div>
+          <span class="motion-status" id="motion-status">Playing · circle blob</span>
         </div>
 
-        <label class="control-group">
-          <span>Animation</span>
-          <select id="animation">
-            <option value="idle">Idle</option>
-            <option value="hello">Hello</option>
-            <option value="rest">Rest</option>
-          </select>
-        </label>
-
-        <div class="api-note">
-          <span>Current definition</span>
-          <code id="definition-code"></code>
+        <div class="stage-shell">
+          <div class="stage-canvas" id="stage-canvas">
+            <div class="stage-glow" aria-hidden="true"></div>
+            <div id="mascot-host" class="mascot-host"></div>
+          </div>
+          <div class="transport" aria-label="Animation controls">
+            <button class="round-button" type="button" data-action="previous-motion" aria-label="Previous motion">
+              <span aria-hidden="true">←</span>
+            </button>
+            <button class="play-button" type="button" data-action="toggle-play" aria-label="Pause animation">
+              <span id="play-icon" aria-hidden="true">Ⅱ</span>
+            </button>
+            <button class="round-button" type="button" data-action="next-motion" aria-label="Next motion">
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
-      </section>
 
-      <section class="preview" aria-label="Live mascot preview">
-        <div class="preview-meta">
-          <span>Live SVG</span>
-          <strong id="shape-name">Circle</strong>
-        </div>
-        <div id="mascot" class="mascot-stage"></div>
-        <div class="platforms" aria-label="Supported platforms">
-          <span>Browser</span>
-          <i></i>
-          <span>React Native</span>
+        <div class="performance-card">
+          <span class="performance-orbit" aria-hidden="true"></span>
+          <div>
+            <strong>Change the blob, keep the performance</strong>
+            <p>One JSON definition drives the same lightweight SVG motion on the web and React Native.</p>
+          </div>
         </div>
       </section>
+
+      <aside class="inspector" aria-label="Mascot editor">
+        <div class="tab-list" role="tablist" aria-label="Editor sections">
+          <button role="tab" aria-selected="true" data-tab="design">Design</button>
+          <button role="tab" aria-selected="false" data-tab="expressions">Expressions</button>
+          <button role="tab" aria-selected="false" data-tab="motions">Motions</button>
+          <button role="tab" aria-selected="false" data-tab="api">API Docs</button>
+        </div>
+        <div class="panel-scroll" id="panel" role="tabpanel" tabindex="0"></div>
+      </aside>
     </main>
 
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <input id="import-file" type="file" accept="application/json,.json" hidden />
     <script type="module" src="/examples/web/demo.js"></script>
   </body>
 </html>

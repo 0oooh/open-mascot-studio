@@ -1,5 +1,6 @@
 export type BuiltInBlobShape = 'circle' | 'oval' | 'capsule' | 'bean' | 'drop' | 'rounded-square'
 export type BlobShape = BuiltInBlobShape | (string & {})
+export type EyeShape = 'capsule' | 'oval'
 
 export interface EyePose {
   scaleX: number
@@ -20,7 +21,7 @@ export interface MascotDefinition {
   schemaVersion: 1
   name: string
   blob: { shape: BlobShape; width: number; height: number; color: string }
-  face: { eyeColor: string; eyeWidth: number; eyeHeight: number; eyeGap: number; eyeY: number }
+  face: { eyeShape?: EyeShape; eyeColor: string; eyeWidth: number; eyeHeight: number; eyeGap: number; eyeY: number }
   stage: { color: string }
   expressions: Record<string, { label: string; pose: MascotPose }>
   animations: Record<string, {
@@ -38,13 +39,13 @@ export interface MascotScene {
   transform: string
   shadow: { cx: number; cy: number; rx: number; ry: number; fill: string; opacity: number }
   blob: { path: string; fill: string }
-  eyes: Array<{ cx: number; cy: number; rx: number; ry: number; rotation: number; fill: string }>
+  eyes: Array<{ shape: EyeShape; cx: number; cy: number; rx: number; ry: number; path: string; rotation: number; fill: string }>
 }
 
 export const MASCOT_SCHEMA: 'open-mascot/definition'
 export const MASCOT_SCHEMA_VERSION: 1
 export const VIEWBOX: { width: 400; height: 400 }
-export function createDefinition(options?: Partial<{ name: string; shape: BlobShape; width: number; height: number; color: string; eyeColor: string; stageColor: string }>): MascotDefinition
+export function createDefinition(options?: Partial<{ name: string; shape: BlobShape; width: number; height: number; color: string; eyeShape: EyeShape; eyeColor: string; stageColor: string }>): MascotDefinition
 export function cloneDefinition(definition: MascotDefinition): MascotDefinition
 export function createPose(options?: Record<string, unknown>): MascotPose
 export function validateDefinition(definition: unknown): { ok: boolean; errors: string[] }

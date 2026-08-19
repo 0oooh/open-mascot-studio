@@ -11,7 +11,7 @@ const escapeXml = value => String(value)
   .replaceAll("'", '&apos;')
 
 const eyeMarkup = eye =>
-  `<g transform="rotate(${eye.rotation} ${eye.cx} ${eye.cy})"><ellipse cx="${eye.cx}" cy="${eye.cy}" rx="${eye.rx}" ry="${eye.ry}" fill="${escapeXml(eye.fill)}"/></g>`
+  `<g transform="rotate(${eye.rotation} ${eye.cx} ${eye.cy})"><path d="${escapeXml(eye.path)}" fill="${escapeXml(eye.fill)}"/></g>`
 
 export const renderSceneToSvgString = (scene, options = {}) => {
   const label = escapeXml(options.label ?? 'Animated mascot')
@@ -39,10 +39,10 @@ const createSvgRenderer = (document, definition, pose) => {
   const blob = document.createElementNS(SVG_NS, 'path')
   const eyeNodes = ['left', 'right'].map(() => {
     const eyeGroup = document.createElementNS(SVG_NS, 'g')
-    const ellipse = document.createElementNS(SVG_NS, 'ellipse')
-    eyeGroup.append(ellipse)
+    const path = document.createElementNS(SVG_NS, 'path')
+    eyeGroup.append(path)
     group.append(eyeGroup)
-    return { group: eyeGroup, ellipse }
+    return { group: eyeGroup, path }
   })
 
   setAttributes(svg, {
@@ -63,11 +63,8 @@ const createSvgRenderer = (document, definition, pose) => {
     setAttributes(blob, { d: scene.blob.path, fill: scene.blob.fill })
     scene.eyes.forEach((eye, index) => {
       eyeNodes[index].group.setAttribute('transform', `rotate(${eye.rotation} ${eye.cx} ${eye.cy})`)
-      setAttributes(eyeNodes[index].ellipse, {
-        cx: eye.cx,
-        cy: eye.cy,
-        rx: eye.rx,
-        ry: eye.ry,
+      setAttributes(eyeNodes[index].path, {
+        d: eye.path,
         fill: eye.fill,
       })
     })

@@ -14,7 +14,8 @@ test('the browser renderer produces a complete standalone SVG', () => {
   assert.match(svg, /^<svg xmlns=/)
   assert.match(svg, /aria-label="Bean &amp; friend"/)
   assert.match(svg, /<path d="M /)
-  assert.equal((svg.match(/<ellipse/g) ?? []).length, 3)
+  assert.equal((svg.match(/<ellipse/g) ?? []).length, 1)
+  assert.equal((svg.match(/<path/g) ?? []).length, 3)
   assert.match(svg, /<\/svg>$/)
 })
 

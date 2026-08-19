@@ -42,3 +42,14 @@ test('play-once motion settles at the final expression', () => {
   assert.equal(sampled.done, true)
   assert.deepEqual(sampled.pose, definition.expressions.neutral.pose)
 })
+
+test('eye style changes geometry without changing the shared pose', () => {
+  const capsule = createDefinition({ eyeShape: 'capsule' })
+  const oval = createDefinition({ eyeShape: 'oval' })
+  const pose = sampleAnimation(capsule, 'idle', 0, { reducedMotion: true }).pose
+  const capsuleScene = buildScene(capsule, pose)
+  const ovalScene = buildScene(oval, pose)
+  assert.equal(capsuleScene.eyes[0].shape, 'capsule')
+  assert.equal(ovalScene.eyes[0].shape, 'oval')
+  assert.notEqual(capsuleScene.eyes[0].path, ovalScene.eyes[0].path)
+})

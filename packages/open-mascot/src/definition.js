@@ -48,6 +48,7 @@ const baseDefinition = {
     color: '#6fcf97',
   },
   face: {
+    eyeShape: 'capsule',
     eyeColor: '#18332a',
     eyeWidth: 20,
     eyeHeight: 42,
@@ -144,6 +145,7 @@ export const createDefinition = (options = {}) => {
   definition.blob.width = options.width ?? dimensions[0]
   definition.blob.height = options.height ?? dimensions[1]
   definition.blob.color = options.color ?? definition.blob.color
+  definition.face.eyeShape = options.eyeShape ?? definition.face.eyeShape
   definition.face.eyeColor = options.eyeColor ?? definition.face.eyeColor
   definition.stage.color = options.stageColor ?? definition.stage.color
   return definition
@@ -163,6 +165,9 @@ export const validateDefinition = definition => {
   if (!(definition.blob?.width > 0) || !(definition.blob?.height > 0)) errors.push('blob dimensions must be positive.')
   if (!/^#[0-9a-f]{6}$/i.test(definition.blob?.color ?? '')) errors.push('blob.color must be a six-digit hex color.')
   if (!/^#[0-9a-f]{6}$/i.test(definition.face?.eyeColor ?? '')) errors.push('face.eyeColor must be a six-digit hex color.')
+  if (definition.face?.eyeShape != null && !['capsule', 'oval'].includes(definition.face.eyeShape)) {
+    errors.push('face.eyeShape must be capsule or oval.')
+  }
   if (!hasFiniteFields(definition.face, ['eyeWidth', 'eyeHeight', 'eyeGap', 'eyeY'])) errors.push('face dimensions must be finite numbers.')
   if (!/^#[0-9a-f]{6}$/i.test(definition.stage?.color ?? '')) errors.push('stage.color must be a six-digit hex color.')
   if (!definition.expressions || !Object.keys(definition.expressions).length) errors.push('At least one expression is required.')

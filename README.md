@@ -4,6 +4,8 @@ Open Mascot is a dependency-free 2D vector mascot engine with matching browser a
 
 The default body primitive is called a **blob**. Built-in blob shapes are `circle`, `oval`, `capsule`, `bean`, `drop`, and `rounded-square`. Every shape uses the same pose space, so changing the silhouette does not require rewriting expressions or animations.
 
+Eyes can use either the original soft `capsule` style or an `oval` style. The choice is stored in the same portable definition and rendered consistently on both platforms.
+
 ## Packages
 
 | Package | Purpose |
@@ -56,7 +58,7 @@ npm run check
 
 ## Project boundary
 
-This MIT project contains only generic primitives and example definitions. It does not include private brand characters, exact proprietary geometry, brand palettes, or proprietary motion presets. It also does not copy source, schemas, presets, assets, or generated output from the AGPL reference project.
+This personal MIT project contains only generic primitives, original example definitions, and its own implementation. It ships no company-specific characters, assets, palettes, links, or product copy.
 
 ## License
 
