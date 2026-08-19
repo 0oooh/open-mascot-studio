@@ -124,6 +124,32 @@ summary:focus-visible {
   box-shadow: 0 0 0 4px rgba(92, 163, 129, 0.12);
 }
 
+.repository-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.38);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+  transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+.repository-link span { color: var(--accent-readable); font-size: 15px; line-height: 1; }
+.repository-link:hover {
+  border-color: #c8bdb2;
+  background: #fff;
+  transform: translateY(-1px);
+}
+.repository-link:focus-visible {
+  outline: 3px solid rgba(201, 79, 52, 0.28);
+  outline-offset: 2px;
+}
+
 .quiet-button,
 .primary-button,
 .secondary-button,
@@ -601,6 +627,7 @@ h1, h2, h3, p { margin-top: 0; }
   body, .workspace { width: 100vw; max-width: 100vw; overflow-x: hidden; }
   .app-header { height: 64px; padding: 0 15px; }
   .save-state, .quiet-button, .primary-button.compact { display: none; }
+  .repository-link { min-height: 36px; padding: 0 11px; }
   .workspace { min-height: calc(100vh - 64px); }
   .preview { width: 100vw; max-width: 100vw; padding: 22px 14px; overflow-x: hidden; }
   .motion-status { display: none; }
