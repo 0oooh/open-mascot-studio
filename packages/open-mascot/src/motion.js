@@ -1,9 +1,19 @@
 const clamp = (value, minimum = 0, maximum = 1) =>
   Math.min(maximum, Math.max(minimum, value))
 
-const smooth = value => {
-  const t = clamp(value)
-  return t * t * t * (t * (t * 6 - 15) + 10)
+const easing = {
+  gentle(value) {
+    const t = clamp(value)
+    return t * t * t * (t * (t * 6 - 15) + 10)
+  },
+  quick(value) {
+    return 1 - (1 - clamp(value)) ** 4
+  },
+  spring(value) {
+    const t = clamp(value)
+    const settled = 1 - (1 - t) ** 4
+    return clamp(settled + Math.sin(t * Math.PI * 2.45) * (1 - t) ** 3 * 0.13)
+  },
 }
 
 const interpolateValue = (from, to, amount) => {
@@ -16,8 +26,8 @@ const interpolateValue = (from, to, amount) => {
   return amount < 1 ? from : to
 }
 
-export const interpolatePose = (from, to, amount) =>
-  interpolateValue(from, to, smooth(amount))
+export const interpolatePose = (from, to, amount, curve = 'gentle') =>
+  interpolateValue(from, to, (easing[curve] ?? easing.gentle)(amount))
 
 export const getAnimationDuration = animation =>
   animation.steps.reduce((total, step, index) => {
@@ -53,12 +63,38 @@ const locateStep = (animation, elapsedMs) => {
   return { index: animation.steps.length - 1, phase: 'hold', progress: 0, done, duration }
 }
 
-const blinkAmountAt = elapsedMs => {
-  const cycle = ((elapsedMs + 900) % 4800 + 4800) % 4800
-  if (cycle < 4450) return 0
-  const progress = (cycle - 4450) / 350
-  if (progress < 0.42) return smooth(progress / 0.42)
-  return 1 - smooth((progress - 0.42) / 0.58)
+const blinkIntervals = {
+  calm: [6800, 5300, 7900, 6100],
+  normal: [5100, 7200, 4300, 6400, 5600],
+  bright: [3900, 5700, 4500, 6900],
+  sleepy: [7600, 9100, 6800],
+  none: [],
+}
+
+const blinkShape = progress => {
+  if (progress < 0.23) return easing.quick(progress / 0.23)
+  if (progress < 0.39) return 1
+  return 1 - easing.gentle((progress - 0.39) / 0.61)
+}
+
+const blinkAmountAt = (elapsedMs, selectedProfile) => {
+  const profile = selectedProfile === false ? 'none' : selectedProfile === true ? 'normal' : selectedProfile
+  const intervals = blinkIntervals[profile] ?? blinkIntervals.normal
+  if (!intervals.length || elapsedMs < 0) return 0
+  let cursor = 1700 + intervals[0] * 0.32
+  let index = 0
+  while (cursor <= elapsedMs && index < 10000) {
+    const duration = profile === 'sleepy' ? 320 : index % 7 === 4 ? 250 : 205
+    const within = elapsedMs - cursor
+    if (within >= 0 && within <= duration) return blinkShape(within / duration)
+    if (profile === 'bright' && index % 5 === 2) {
+      const echoWithin = elapsedMs - (cursor + duration + 118)
+      if (echoWithin >= 0 && echoWithin <= 170) return blinkShape(echoWithin / 170) * 0.88
+    }
+    cursor += intervals[index % intervals.length]
+    index += 1
+  }
+  return 0
 }
 
 const addAmbientMotion = (pose, elapsedMs, amount, blink) => {
@@ -73,7 +109,7 @@ const addAmbientMotion = (pose, elapsedMs, amount, blink) => {
   next.gaze.x += Math.sin(seconds * 0.31) * 0.45 * strength
   next.gaze.y += Math.sin(seconds * 0.27 + 1.8) * 0.3 * strength
 
-  const blinkAmount = blink ? blinkAmountAt(elapsedMs) : 0
+  const blinkAmount = blinkAmountAt(elapsedMs, blink)
   next.eyes.left.scaleY *= Math.max(0.06, 1 - blinkAmount * 0.95)
   next.eyes.right.scaleY *= Math.max(0.06, 1 - blinkAmount * 0.95)
   return { pose: next, blink: blinkAmount }
@@ -90,7 +126,7 @@ export const sampleAnimation = (definition, animationKey, elapsedMs, options = {
   if (location.phase === 'transition') {
     const nextIndex = (location.index + 1) % animation.steps.length
     const nextStep = animation.steps[nextIndex]
-    pose = interpolatePose(current, definition.expressions[nextStep.expression].pose, location.progress)
+    pose = interpolatePose(current, definition.expressions[nextStep.expression].pose, location.progress, currentStep.easing)
   }
 
   const layered = options.reducedMotion

@@ -51,9 +51,9 @@ const baseDefinition = {
     eyeShape: 'capsule',
     eyeColor: '#18332a',
     eyeWidth: 20,
-    eyeHeight: 42,
-    eyeGap: 58,
-    eyeY: -8,
+    eyeHeight: 50,
+    eyeGap: 35,
+    eyeY: -7,
   },
   stage: {
     color: '#f3efe7',
@@ -63,39 +63,137 @@ const baseDefinition = {
       label: 'Neutral',
       pose: createPose(),
     },
+    attentive: {
+      label: 'Attentive',
+      pose: createPose({
+        x: 2,
+        rotation: 4,
+        gazeX: 3,
+        leftEye: eyePose(0.95, 1.13),
+        rightEye: eyePose(0.95, 1.13),
+      }),
+    },
     curious: {
       label: 'Curious',
       pose: createPose({
-        x: -3,
-        y: -4,
+        x: -2,
         rotation: -7,
         gazeX: -4,
-        gazeY: -3,
-        leftEye: eyePose(0.94, 1.08, 0, 0, 8),
-        rightEye: eyePose(0.88, 0.9, 0, 1, -5),
+        gazeY: -2,
+        leftEye: eyePose(0.92, 1.06, 0, 0, 17),
+        rightEye: eyePose(0.82, 0.88, 0, 1, -13),
       }),
     },
-    happy: {
-      label: 'Happy',
+    'glance-up': {
+      label: 'Glance up',
       pose: createPose({
-        y: -8,
-        rotation: 4,
-        scaleX: 1.04,
-        scaleY: 0.96,
-        leftEye: eyePose(1.22, 0.58, 0, -1, -6),
-        rightEye: eyePose(1.22, 0.58, 0, -1, 6),
+        x: 3,
+        rotation: -10,
+        gazeX: 5,
+        gazeY: -10,
+        leftEye: eyePose(1.02, 0.88),
+        rightEye: eyePose(1.02, 0.88),
+      }),
+    },
+    gentle: {
+      label: 'Gentle',
+      pose: createPose({
+        x: -1,
+        rotation: -5,
+        gazeY: 5,
+        leftEye: eyePose(1.08, 0.82),
+        rightEye: eyePose(1.08, 0.82),
+      }),
+    },
+    skeptical: {
+      label: 'Skeptical',
+      pose: createPose({
+        x: 2,
+        rotation: -6,
+        gazeX: 4,
+        leftEye: eyePose(1.1, 0.34, 0, -1, -4),
+        rightEye: eyePose(0.9, 1.08, 0, 1, 3),
+      }),
+    },
+    joyful: {
+      label: 'Joyful',
+      pose: createPose({
+        x: -2,
+        y: -5,
+        rotation: 8,
+        scaleX: 1.02,
+        scaleY: 0.95,
+        leftEye: eyePose(1.32, 1.4, 0, -2, -5),
+        rightEye: eyePose(1.32, 1.4, 0, -2, 5),
+      }),
+    },
+    playful: {
+      label: 'Playful',
+      pose: createPose({
+        x: 2,
+        y: -3,
+        rotation: -12,
+        gazeX: 3,
+        leftEye: eyePose(0.85, 0.86, 0, 0, 22),
+        rightEye: eyePose(0.85, 0.86, 0, 0, -18),
+      }),
+    },
+    surprised: {
+      label: 'Surprised',
+      pose: createPose({
+        x: -1,
+        y: -4,
+        rotation: -5,
+        scaleX: 0.99,
+        scaleY: 1.03,
+        leftEye: eyePose(1.55, 0.72),
+        rightEye: eyePose(1.55, 0.72),
+      }),
+    },
+    shy: {
+      label: 'Shy',
+      pose: createPose({
+        x: 1,
+        rotation: 5,
+        gazeX: -2,
+        gazeY: 10,
+        leftEye: eyePose(0.92, 0.66),
+        rightEye: eyePose(0.92, 0.66),
+      }),
+    },
+    sad: {
+      label: 'Sad',
+      pose: createPose({
+        x: -1,
+        rotation: -4,
+        scaleX: 1.01,
+        scaleY: 0.98,
+        gazeY: 8,
+        leftEye: eyePose(1.12, 0.48, 0, 2, -8),
+        rightEye: eyePose(1.12, 0.48, 0, 2, 8),
       }),
     },
     sleepy: {
       label: 'Sleepy',
       pose: createPose({
-        y: 5,
-        rotation: 3,
-        scaleX: 1.02,
-        scaleY: 0.98,
+        rotation: 5,
+        scaleX: 1.01,
+        scaleY: 0.97,
         gazeY: 4,
-        leftEye: eyePose(1.15, 0.2),
-        rightEye: eyePose(1.15, 0.2),
+        leftEye: eyePose(1.25, 0.18),
+        rightEye: eyePose(1.25, 0.18),
+      }),
+    },
+    proud: {
+      label: 'Proud',
+      pose: createPose({
+        x: 3,
+        y: -2,
+        rotation: -6,
+        gazeX: 5,
+        gazeY: -5,
+        leftEye: eyePose(0.94, 0.82),
+        rightEye: eyePose(0.94, 0.82),
       }),
     },
   },
@@ -103,34 +201,122 @@ const baseDefinition = {
     idle: {
       label: 'Idle',
       playback: 'loop',
-      ambient: 0.45,
-      blink: true,
+      ambient: 0.42,
+      blink: 'normal',
       steps: [
-        { expression: 'neutral', holdMs: 3000, transitionMs: 650 },
-        { expression: 'curious', holdMs: 1800, transitionMs: 720 },
-        { expression: 'neutral', holdMs: 2600, transitionMs: 680 },
+        { expression: 'neutral', holdMs: 4400, transitionMs: 640, easing: 'gentle' },
+        { expression: 'curious', holdMs: 3200, transitionMs: 760, easing: 'gentle' },
+        { expression: 'neutral', holdMs: 5100, transitionMs: 720, easing: 'gentle' },
       ],
     },
-    hello: {
-      label: 'Hello',
+    listening: {
+      label: 'Listening',
+      playback: 'loop',
+      ambient: 0.28,
+      blink: 'calm',
+      steps: [
+        { expression: 'attentive', holdMs: 2600, transitionMs: 560, easing: 'gentle' },
+        { expression: 'gentle', holdMs: 2200, transitionMs: 680, easing: 'gentle' },
+        { expression: 'attentive', holdMs: 3100, transitionMs: 610, easing: 'gentle' },
+      ],
+    },
+    thinking: {
+      label: 'Thinking',
+      playback: 'loop',
+      ambient: 0.34,
+      blink: 'normal',
+      steps: [
+        { expression: 'curious', holdMs: 1750, transitionMs: 690, easing: 'gentle' },
+        { expression: 'skeptical', holdMs: 2100, transitionMs: 610, easing: 'gentle' },
+        { expression: 'glance-up', holdMs: 2500, transitionMs: 780, easing: 'gentle' },
+        { expression: 'curious', holdMs: 1850, transitionMs: 640, easing: 'gentle' },
+      ],
+    },
+    happy: {
+      label: 'Happy',
+      playback: 'loop',
+      ambient: 0.48,
+      blink: 'bright',
+      steps: [
+        { expression: 'gentle', holdMs: 1300, transitionMs: 520, easing: 'spring' },
+        { expression: 'joyful', holdMs: 2100, transitionMs: 620, easing: 'spring' },
+        { expression: 'playful', holdMs: 1700, transitionMs: 570, easing: 'gentle' },
+      ],
+    },
+    curious: {
+      label: 'Curious',
+      playback: 'loop',
+      ambient: 0.38,
+      blink: 'normal',
+      steps: [
+        { expression: 'curious', holdMs: 2300, transitionMs: 650, easing: 'gentle' },
+        { expression: 'glance-up', holdMs: 2700, transitionMs: 710, easing: 'gentle' },
+        { expression: 'attentive', holdMs: 1900, transitionMs: 580, easing: 'gentle' },
+      ],
+    },
+    surprised: {
+      label: 'Surprised',
       playback: 'once',
-      ambient: 0.3,
-      blink: true,
+      ambient: 0.22,
+      blink: 'bright',
       steps: [
-        { expression: 'neutral', holdMs: 300, transitionMs: 360 },
-        { expression: 'happy', holdMs: 850, transitionMs: 440 },
-        { expression: 'curious', holdMs: 500, transitionMs: 420 },
-        { expression: 'neutral', holdMs: 500, transitionMs: 0 },
+        { expression: 'neutral', holdMs: 180, transitionMs: 120, easing: 'quick' },
+        { expression: 'surprised', holdMs: 1450, transitionMs: 360, easing: 'spring' },
+        { expression: 'curious', holdMs: 900, transitionMs: 820, easing: 'gentle' },
       ],
     },
-    rest: {
-      label: 'Rest',
+    shy: {
+      label: 'Shy',
+      playback: 'loop',
+      ambient: 0.2,
+      blink: 'calm',
+      steps: [
+        { expression: 'gentle', holdMs: 2400, transitionMs: 720, easing: 'gentle' },
+        { expression: 'shy', holdMs: 3300, transitionMs: 810, easing: 'gentle' },
+      ],
+    },
+    sad: {
+      label: 'Sad',
       playback: 'loop',
       ambient: 0.16,
-      blink: false,
+      blink: 'sleepy',
       steps: [
-        { expression: 'sleepy', holdMs: 3600, transitionMs: 900 },
-        { expression: 'neutral', holdMs: 700, transitionMs: 860 },
+        { expression: 'sad', holdMs: 3900, transitionMs: 920, easing: 'gentle' },
+        { expression: 'sleepy', holdMs: 2800, transitionMs: 980, easing: 'gentle' },
+        { expression: 'gentle', holdMs: 3500, transitionMs: 880, easing: 'gentle' },
+      ],
+    },
+    proud: {
+      label: 'Proud',
+      playback: 'loop',
+      ambient: 0.32,
+      blink: 'normal',
+      steps: [
+        { expression: 'attentive', holdMs: 1600, transitionMs: 560, easing: 'gentle' },
+        { expression: 'proud', holdMs: 2900, transitionMs: 680, easing: 'spring' },
+        { expression: 'gentle', holdMs: 1800, transitionMs: 760, easing: 'gentle' },
+      ],
+    },
+    celebrate: {
+      label: 'Celebrate',
+      playback: 'once',
+      ambient: 0.54,
+      blink: 'bright',
+      steps: [
+        { expression: 'shy', holdMs: 240, transitionMs: 180, easing: 'quick' },
+        { expression: 'joyful', holdMs: 1050, transitionMs: 390, easing: 'spring' },
+        { expression: 'playful', holdMs: 950, transitionMs: 430, easing: 'spring' },
+        { expression: 'proud', holdMs: 1500, transitionMs: 760, easing: 'gentle' },
+      ],
+    },
+    sleeping: {
+      label: 'Sleeping',
+      playback: 'loop',
+      ambient: 0.1,
+      blink: 'sleepy',
+      steps: [
+        { expression: 'sleepy', holdMs: 4700, transitionMs: 1100, easing: 'gentle' },
+        { expression: 'sad', holdMs: 2100, transitionMs: 1250, easing: 'gentle' },
       ],
     },
   },
@@ -185,12 +371,18 @@ export const validateDefinition = definition => {
 
   for (const [key, animation] of Object.entries(definition.animations ?? {})) {
     if (!['loop', 'once'].includes(animation.playback)) errors.push(`${key}.playback must be loop or once.`)
+    if (![true, false, 'none', 'calm', 'normal', 'bright', 'sleepy'].includes(animation.blink)) {
+      errors.push(`${key}.blink has an unknown profile.`)
+    }
     if (!Array.isArray(animation.steps) || !animation.steps.length) {
       errors.push(`${key} must have at least one step.`)
       continue
     }
     for (const step of animation.steps) {
       if (!definition.expressions?.[step.expression]) errors.push(`${key} references unknown expression "${step.expression}".`)
+      if (step.easing != null && !['gentle', 'quick', 'spring'].includes(step.easing)) {
+        errors.push(`${key} step has an unknown easing curve.`)
+      }
       if (!Number.isFinite(step.holdMs) || !Number.isFinite(step.transitionMs)
         || step.holdMs < 0 || step.transitionMs < 0) errors.push(`${key} step timings must be finite and non-negative.`)
     }

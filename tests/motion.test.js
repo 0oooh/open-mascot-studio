@@ -37,10 +37,10 @@ test('blob motion changes transforms without mutating the selected silhouette', 
 
 test('play-once motion settles at the final expression', () => {
   const definition = createDefinition()
-  const duration = getAnimationDuration(definition.animations.hello)
-  const sampled = sampleAnimation(definition, 'hello', duration + 1000, { reducedMotion: true })
+  const duration = getAnimationDuration(definition.animations.surprised)
+  const sampled = sampleAnimation(definition, 'surprised', duration + 1000, { reducedMotion: true })
   assert.equal(sampled.done, true)
-  assert.deepEqual(sampled.pose, definition.expressions.neutral.pose)
+  assert.deepEqual(sampled.pose, definition.expressions.curious.pose)
 })
 
 test('eye style changes geometry without changing the shared pose', () => {

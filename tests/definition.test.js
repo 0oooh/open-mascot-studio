@@ -12,6 +12,8 @@ test('the default mascot is a valid circular blob', () => {
   const definition = createDefinition()
   assert.equal(definition.blob.shape, 'circle')
   assert.equal(definition.face.eyeShape, 'capsule')
+  assert.equal(Object.keys(definition.expressions).length, 13)
+  assert.equal(Object.keys(definition.animations).length, 11)
   assert.deepEqual(validateDefinition(definition), { ok: true, errors: [] })
 })
 
@@ -21,6 +23,18 @@ test('capsule and oval eye styles are both valid definition choices', () => {
     assert.equal(definition.face.eyeShape, eyeShape)
     assert.equal(validateDefinition(definition).ok, true)
   }
+})
+
+test('the complete expression and motion palettes are included', () => {
+  const definition = createDefinition()
+  assert.deepEqual(Object.keys(definition.expressions), [
+    'neutral', 'attentive', 'curious', 'glance-up', 'gentle', 'skeptical',
+    'joyful', 'playful', 'surprised', 'shy', 'sad', 'sleepy', 'proud',
+  ])
+  assert.deepEqual(Object.keys(definition.animations), [
+    'idle', 'listening', 'thinking', 'happy', 'curious', 'surprised',
+    'shy', 'sad', 'proud', 'celebrate', 'sleeping',
+  ])
 })
 
 test('all built-in blob shapes create finite closed SVG paths', () => {

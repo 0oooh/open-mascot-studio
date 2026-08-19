@@ -18,4 +18,6 @@ Built-in shapes: `circle`, `oval`, `capsule`, `bean`, `drop`, and `rounded-squar
 
 Built-in eye styles: `capsule` and `oval`.
 
+The starter definition includes 13 expression poses and 11 motion sequences with editable timing, easing, ambient motion, and blink profiles.
+
 Licensed under MIT.

@@ -28,8 +28,8 @@ export interface MascotDefinition {
     label: string
     playback: 'loop' | 'once'
     ambient: number
-    blink: boolean
-    steps: Array<{ expression: string; holdMs: number; transitionMs: number }>
+    blink: boolean | 'none' | 'calm' | 'normal' | 'bright' | 'sleepy'
+    steps: Array<{ expression: string; holdMs: number; transitionMs: number; easing?: 'gentle' | 'quick' | 'spring' }>
   }>
 }
 
@@ -53,7 +53,7 @@ export function listBlobShapes(): string[]
 export function hasBlobShape(name: string): boolean
 export function registerBlobShape(name: string, builder: (blob: MascotDefinition['blob']) => string): () => boolean
 export function createBlobPath(blob: MascotDefinition['blob']): string
-export function interpolatePose(from: MascotPose, to: MascotPose, amount: number): MascotPose
+export function interpolatePose(from: MascotPose, to: MascotPose, amount: number, curve?: 'gentle' | 'quick' | 'spring'): MascotPose
 export function getAnimationDuration(animation: MascotDefinition['animations'][string]): number
 export function sampleAnimation(definition: MascotDefinition, animationKey: string, elapsedMs: number, options?: { reducedMotion?: boolean }): { pose: MascotPose; blink: number; done: boolean; duration: number; index: number; phase: string; animationKey: string }
 export function sampleExpression(definition: MascotDefinition, expressionKey: string): MascotPose

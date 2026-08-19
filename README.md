@@ -6,6 +6,8 @@ The default body primitive is called a **blob**. Built-in blob shapes are `circl
 
 Eyes can use either the original soft `capsule` style or an `oval` style. The choice is stored in the same portable definition and rendered consistently on both platforms.
 
+The default definition includes 13 editable expressions and 11 composed motions. Motion steps retain their expression, easing curve, hold time, transition time, ambient amount, and blink profile.
+
 ## Packages
 
 | Package | Purpose |

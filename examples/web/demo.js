@@ -6,7 +6,7 @@ import {
 } from '/packages/open-mascot/src/index.js'
 import { createMascot } from '/packages/open-mascot/src/web.js'
 
-const STORAGE_KEY = 'open-mascot-studio-v1'
+const STORAGE_KEY = 'open-mascot-studio-v2'
 const panel = document.querySelector('#panel')
 const stage = document.querySelector('#stage-canvas')
 const saveState = document.querySelector('#save-state')
@@ -284,6 +284,16 @@ const renderStep = (step, index) => `
         <select class="select-input" data-scope="step" data-index="${index}" data-path="expression">${expressionOptions(step.expression)}</select>
       </label>
       <label class="field">
+        <span>Easing</span>
+        <select class="select-input" data-scope="step" data-index="${index}" data-path="easing">
+          ${optionList([
+            { value: 'gentle', label: 'Gentle settle' },
+            { value: 'spring', label: 'Soft spring' },
+            { value: 'quick', label: 'Quick response' },
+          ], step.easing ?? 'gentle')}
+        </select>
+      </label>
+      <label class="field">
         <span>Hold (ms)</span>
         <input class="number-input" type="number" min="0" max="12000" step="50" value="${step.holdMs}" data-scope="step" data-index="${index}" data-path="holdMs" />
       </label>
@@ -305,19 +315,31 @@ const renderMotions = () => {
     ${panelHeading('Compose the motion', 'Sequence expression beats, tune timing, and preview the same motion data used by both renderers.')}
     <div class="chip-list">${chips}</div>
     <section class="section-block">
-      <div class="section-title"><h3>Playback</h3><span>${animation.steps.length} beats</span></div>
+      <div class="section-title"><h3>Performance</h3><span>${animation.steps.length} beats</span></div>
       <div class="control-grid">
         <label class="field">
-          <span>Mode</span>
+          <span>Motion name</span>
+          <input class="text-input" value="${escapeHtml(animation.label)}" data-scope="animation" data-path="label" />
+        </label>
+        <label class="field">
+          <span>Playback</span>
           <select class="select-input" data-scope="animation" data-path="playback">
             ${optionList([{ value: 'loop', label: 'Loop' }, { value: 'once', label: 'Play once' }], animation.playback)}
           </select>
         </label>
-        ${rangeField({ label: 'Ambient motion', path: 'ambient', value: animation.ambient, min: 0, max: 1, step: .01, scope: 'animation' })}
-        <label class="check-field">
-          <input type="checkbox" data-scope="animation" data-path="blink" ${animation.blink ? 'checked' : ''} />
-          Natural blinking
+        <label class="field">
+          <span>Blink profile</span>
+          <select class="select-input" data-scope="animation" data-path="blink">
+            ${optionList([
+              { value: 'normal', label: 'Normal' },
+              { value: 'calm', label: 'Calm' },
+              { value: 'bright', label: 'Bright' },
+              { value: 'sleepy', label: 'Sleepy' },
+              { value: 'none', label: 'None' },
+            ], typeof animation.blink === 'string' ? animation.blink : animation.blink ? 'normal' : 'none')}
+          </select>
         </label>
+        ${rangeField({ label: 'Ambient motion', path: 'ambient', value: animation.ambient, min: 0, max: 1, step: .01, scope: 'animation' })}
       </div>
       <div class="action-row">
         <button class="primary-button" type="button" data-action="play-selected">Play selected motion</button>
@@ -535,7 +557,7 @@ panel.addEventListener('input', event => {
 })
 
 panel.addEventListener('change', event => {
-  if (event.target.matches('select[data-scope="step"]')) renderPanel()
+  if (event.target.matches('select[data-scope="step"], input[data-scope="animation"][data-path="label"]')) renderPanel()
 })
 
 importFile.addEventListener('change', async () => {
