@@ -1,0 +1,29 @@
+{
+  "name": "open-mascot",
+  "version": "0.1.0",
+  "description": "A lightweight, platform-neutral 2D vector mascot engine with a browser SVG runtime.",
+  "author": "0oooh",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./web": {
+      "types": "./src/web.d.ts",
+      "import": "./src/web.js",
+      "default": "./src/web.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Open Mascot browser and React Native 2D blob demo." />
+    <title>Open Mascot</title>
+    <link rel="stylesheet" href="/examples/web/styles.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/" class="brand" aria-label="Open Mascot home">
+        <span class="brand-dot" aria-hidden="true"><i></i><i></i></span>
+        <span><strong>Open Mascot</strong><small>MIT · 2D vector runtime</small></span>
+      </a>
+      <code>npm install open-mascot</code>
+    </header>
+
+    <main>
+      <section class="intro">
+        <p class="eyebrow">One definition, two platforms</p>
+        <h1>Shape a blob.<br />Keep the motion.</h1>
+        <p class="lede">Every silhouette below shares the same expression and animation data across browser SVG and React Native.</p>
+
+        <div class="control-group">
+          <span>Blob shape</span>
+          <div class="shape-list" id="shape-list"></div>
+        </div>
+
+        <label class="control-group">
+          <span>Animation</span>
+          <select id="animation">
+            <option value="idle">Idle</option>
+            <option value="hello">Hello</option>
+            <option value="rest">Rest</option>
+          </select>
+        </label>
+
+        <div class="api-note">
+          <span>Current definition</span>
+          <code id="definition-code"></code>
+        </div>
+      </section>
+
+      <section class="preview" aria-label="Live mascot preview">
+        <div class="preview-meta">
+          <span>Live SVG</span>
+          <strong id="shape-name">Circle</strong>
+        </div>
+        <div id="mascot" class="mascot-stage"></div>
+        <div class="platforms" aria-label="Supported platforms">
+          <span>Browser</span>
+          <i></i>
+          <span>React Native</span>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/examples/web/demo.js"></script>
+  </body>
+</html>
